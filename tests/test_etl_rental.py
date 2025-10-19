@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from pyspark.sql import Row
 from pyspark.sql.functions import lit
 
-# Configurar Spark para pruebas locales
+# Configurar Spark para pruebas 
 @pytest.fixture(scope="module")
 def spark():
     spark = SparkSession.builder \
