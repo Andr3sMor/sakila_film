@@ -41,7 +41,115 @@ jobs:
     
     env:
       AWS_REGION: us-east-1
+      S3_BUCKET_SCRIPTS: scripts-glue2name: CI/CD Pipeline (AWS Glue ETL)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'glue_scripts/etl_rental.py'
+      - 'tests/test_etl_rental.py'
+      - 'requirements.txt'
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run ETL Integration Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          
+      - name: Set up Test Environment
+        run: |
+          python3 -m venv env-test
+          source env-test/bin/activate
+          pip install pytest mock boto3 botocore pyspark
+
+      - name: Run ETL Tests
+        run: |
+          source env-test/bin/activate
+          export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
+          pytest tests/test_etl_rental.py -v
+
+  deploy-glue:
+    name: Deploy AWS Glue Script
+    runs-on: ubuntu-latest
+    needs: test
+    
+    env:
+      AWS_REGION: us-east-1
       S3_BUCKET_SCRIPTS: scripts-glue2
+      GLUE_JOB_NAME: sakila-etl-fact-rental
+      SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload Glue Script to S3
+        id: upload
+        run: |
+          VERSION=$(date +%Y%m%d%H%M%S)
+          S3_LOCATION="s3://${{ env.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$(basename ${{ env.SCRIPT_LOCAL_PATH }})"
+          
+          echo "Subiendo ${{ env.SCRIPT_LOCAL_PATH }} a $S3_LOCATION"
+          aws s3 cp ${{ env.SCRIPT_LOCAL_PATH }} $S3_LOCATION
+          
+          echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
+
+      - name: Create or Update Glue Job (Safe)
+        run: |
+          echo "Procesando Glue Job: ${{ env.GLUE_JOB_NAME }} con script: ${{ env.GLUE_SCRIPT_PATH }}"
+
+          set +e
+          JOB_EXISTS=$(aws glue get-job \
+            --job-name ${{ env.GLUE_JOB_NAME }} \
+            --query 'Job.Name' \
+            --output text 2>/dev/null)
+          set -e
+
+          if [ "$JOB_EXISTS" == "None" ] || [ -z "$JOB_EXISTS" ]; then
+            echo "Job no existe. Creándolo por primera vez..."
+            aws glue create-job \
+              --name ${{ env.GLUE_JOB_NAME }} \
+              --role "${{ secrets.AWS_GLUE_ROLE_ARN }}" \
+              --command "Name=glueetl,ScriptLocation=${{ env.GLUE_SCRIPT_PATH }},PythonVersion=3" \
+              --glue-version "4.0" \
+              --default-arguments '{"--job-language":"python","--enable-metrics":"true"}'
+          else
+            echo "Job encontrado. Actualizando script..."
+            ROLE=$(aws glue get-job \
+              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --query 'Job.Role' \
+              --output text)
+
+            aws glue update-job \
+              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --job-update "{
+                \"Role\": \"$ROLE\",
+                \"Command\": {
+                  \"Name\": \"glueetl\",
+                  \"ScriptLocation\": \"${{ env.GLUE_SCRIPT_PATH }}\"
+                }
+              }"
+          fi
+
+      - name: Deployment Completed
+        run: echo "Despliegue continuo de Glue Job completado exitosamente."
+
       GLUE_JOB_NAME: sakila-etl-fact-rental
       GLUE_ROLE_ARN: arn:aws:iam::<TU_ID_DE_CUENTA>:role/AWSGlueServiceRole-GlueJob
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
