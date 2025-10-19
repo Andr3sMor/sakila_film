@@ -1,7 +1,6 @@
 name: Ejecutar Glue ETL Incremental
 
 on:
-  on:
   push:
     branches: ["main"]
     paths:

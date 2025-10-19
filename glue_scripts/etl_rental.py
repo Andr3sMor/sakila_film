@@ -23,7 +23,7 @@ job.init(args["JOB_NAME"], args)
 print(f"Iniciando ETL para fecha: {PROCESSING_DATE}")
 
 # -----------------------------
-# 2. Lectura de Tablas desde Glue Catalog
+# 2. Tablas desde Glue Catalog
 # -----------------------------
 rental_dyf = glueContext.create_dynamic_frame.from_catalog(
     database="sakilabd",
