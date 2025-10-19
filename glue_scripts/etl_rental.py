@@ -8,7 +8,7 @@ from pyspark.sql.functions import col, lit, date_format
 from awsgluedq.transforms import EvaluateDataQuality
 
 # -----------------------------
-# 1. Parámetros y Contexto
+# 1. Parámetros
 # -----------------------------
 args = getResolvedOptions(sys.argv, ["JOB_NAME", "PROCESSING_DATE"])
 PROCESSING_DATE = args["PROCESSING_DATE"]
