@@ -23,7 +23,6 @@ predicate = f"DATE(rental_date) = '{PROCESSING_DATE}'"
 print(f"-> Leyendo la tabla {DB_TABLE} con filtro: {predicate}")
 
 # 3. Lectura desde RDS con 'Pushdown Predicate'
-# **¡Aquí es donde AWS Glue hace la magia con Secrets Manager!**
 datasource = glueContext.create_dynamic_frame.from_options(
     connection_type="jdbc",
     connection_options={
