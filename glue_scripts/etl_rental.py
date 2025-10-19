@@ -66,7 +66,7 @@ df_fact_rental = df_rental.withColumn(
     lit(PROCESSING_DATE)
 )
 
-# 5. Escritura en S3 en formato Parquet y Particionamiento
+# 5. Escritura en S3 en formato Parquet y Particionamiento de archivos 
 df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
 
 print(f"-> Fact_rental cargado y particionado para el día: {PROCESSING_DATE}")
