@@ -79,7 +79,7 @@ jobs:
           set -e
 
           if [ "$JOB_EXISTS" == "None" ] || [ -z "$JOB_EXISTS" ]; then
-            echo "➡️ Job no existe. Creándolo por primera vez..."
+            echo "Job no existe. Creándolo por primera vez..."
             aws glue create-job \
               --name ${{ env.GLUE_JOB_NAME }} \
               --role "${{ secrets.AWS_GLUE_ROLE_ARN }}" \
@@ -87,7 +87,7 @@ jobs:
               --glue-version "4.0" \
               --default-arguments '{"--job-language":"python","--enable-metrics":"true"}'
           else
-            echo "✅ Job encontrado. Actualizando script..."
+            echo "Job encontrado. Actualizando script..."
             ROLE=$(aws glue get-job \
               --job-name ${{ env.GLUE_JOB_NAME }} \
               --query 'Job.Role' \

@@ -53,6 +53,6 @@ def test_fact_rental_transformation(spark):
     assert first_row.film_id == 1, "El campo film_id debería ser constante = 1"
     assert first_row.partition_date == PROCESSING_DATE, "El campo partition_date no coincide con el valor esperado"
 
-    # --- 4. Verificar cantidad de registros ---
+    # --- 4. Verificar cantidad de registros de simulación ---
     assert df_fact_rental.count() == 2, "No se conservaron todos los registros"
 
