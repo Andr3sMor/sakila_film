@@ -47,16 +47,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: test # Solo se ejecuta si los tests pasan
     
-    # Define variables de entorno del proyecto (REEMPLAZAR LOS VALORES < >)
+    # Define variables de entorno del proyecto (Secrets y Constantes)
     env:
-      S3_BUCKET_SCRIPTS: scripts-glue2
+      S3_BUCKET_SCRIPTS: ${{ secrets.S3_BUCKET_SCRIPTS }} # EJ: sakila-etl-scripts-2025
       GLUE_JOB_NAME: sakila-etl-fact-rental
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
-      CONNECTION_NAME: Jdbc connection
+      CONNECTION_NAME: ${{ secrets.CONNECTION_NAME }} # EJ: sakila-rds-connection
       GLUE_VERSION: 4.0
       
-      # INFORMACION SENSIBLE REQUERIDA PARA CREACION DEL JOB
+      # INFORMACION SENSIBLE Y DE CONFIGURACION
       IAM_ROLE_ARN: ${{secrets.AWS_GLUE_ROLE_ARN}}
+      AWS_REGION: ${{ secrets.AWS_REGION }} 
 
     steps:
       - uses: actions/checkout@v4
@@ -64,11 +65,11 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Credenciales del usuario de despliegue (Secrets de GitHub)
+          # Credenciales del usuario de despliegue
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} 
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       # -----------------------------------------------
       # 2a. Subir el script versionado a S3
@@ -92,27 +93,26 @@ jobs:
           JOB_NAME=${{ env.GLUE_JOB_NAME }}
           SCRIPT_PATH=${{ env.GLUE_SCRIPT_PATH }}
 
-          # Lógica para determinar si el Job existe
           set +e 
-          aws glue get-job --job-name $JOB_NAME
+          aws glue get-job --job-name $JOB_NAME --region ${{ env.AWS_REGION }}
           EXIT_CODE=$?
           set -e 
 
           if [ $EXIT_CODE -eq 0 ]; then
             # Job existe: ACTUALIZAR
             echo Job $JOB_NAME encontrado. Procediendo a ACTUALIZAR...
-            # Usando la sintaxis simplificada para --job-update
             aws glue update-job \
               --job-name $JOB_NAME \
+              --region ${{ env.AWS_REGION }} \
               --job-update "Role=${{ env.IAM_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH}"
             
           elif [ $EXIT_CODE -eq 254 ]; then
             # Job NO existe: CREAR
             echo Job $JOB_NAME no encontrado. Procediendo a CREAR...
-            # Usando la sintaxis de creacion
             aws glue create-job \
               --name $JOB_NAME \
               --role ${{ env.IAM_ROLE_ARN }} \
+              --region ${{ env.AWS_REGION }} \
               --command Name=glueetl,ScriptLocation=$SCRIPT_PATH \
               --glue-version ${{ env.GLUE_VERSION }} \
               --number-of-workers 5 \
@@ -125,30 +125,59 @@ jobs:
           fi
 
       # -----------------------------------------------
-      # 2c. Ejecutar el Glue Job para los dos dias (Prueba de Incrementalidad)
+      # 2c. Ejecutar el Glue Job para los dos dias (Prueba de Incrementalidad y Concurrencia)
       # -----------------------------------------------
-      - name: Run Glue Job for Two Processing Dates (Sequential)
+      - name: Run Glue Job for Two Processing Dates (Sequential Wait)
         run: |
-          echo Ejecutando Glue Job para dos dias de prueba
+          echo Ejecutando Glue Job para dos dias de prueba secuencialmente...
           
-          # Calcular las fechas de prueba
           TODAY=$(date +%Y-%m-%d)
           YESTERDAY=$(date -d yesterday +%Y-%m-%d)
           
-          # La ejecucion secuencial de los dos dias prueba la incrementalidad
+          MAX_WAIT_MINUTES=15
+          
           for DATE in $YESTERDAY $TODAY; do
             echo Lanzando Glue Job para fecha $DATE
             JOB_RUN_ID=$(aws glue start-job-run \
               --job-name ${{ env.GLUE_JOB_NAME }} \
+              --region ${{ env.AWS_REGION }} \
               --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}' \
               --query JobRunId \
               --output text)
 
             echo JobRunId: $JOB_RUN_ID
 
-            # Nota: Aqui se omitio el bucle de espera para no detener el CI/CD, pero se lanza el Job.
-            echo Revisa la consola de AWS para el estado del Job: $JOB_RUN_ID
-          done
+            # INICIO DE ESPERA PARA EVITAR ConcurrentRunsExceededException
+            echo Esperando a que finalice la ejecucion para $DATE...
+            WAITED=0
+            STATE="STARTING"
+            
+            while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
+              if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
+                echo Error: Tiempo maximo de espera alcanzado ($MAX_WAIT_MINUTES min).
+                aws glue stop-job-run --job-name ${{ env.GLUE_JOB_NAME }} --run-id "$JOB_RUN_ID" --region ${{ env.AWS_REGION }} || true
+                exit 1
+              fi
+              sleep 60
+              WAITED=$((WAITED+1))
+              STATE=$(aws glue get-job-run \
+                --job-name ${{ env.GLUE_JOB_NAME }} \
+                --run-id "$JOB_RUN_ID" \
+                --query 'JobRun.JobRunState' \
+                --region ${{ env.AWS_REGION }} \
+                --output text)
+              echo Estado actual ($DATE): $STATE (min: $WAITED)
+            done
+            
+            if [ "$STATE" != "SUCCEEDED" ]; then
+              echo Error: El job fallo para la fecha $DATE con estado $STATE
+              exit 1
+            fi
+
+            echo Job completado exitosamente para la fecha $DATE
+            # FIN DE ESPERA
+
+          done # Fin del bucle FOR
 
       - name: Deployment Completed
-        run: echo Despliegue continuo de Glue Job completado.
+        run: echo Despliegue continuo de Glue Job y prueba incremental completados.
