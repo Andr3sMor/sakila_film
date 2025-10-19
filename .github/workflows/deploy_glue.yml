@@ -49,15 +49,14 @@ jobs:
     
     # Define variables de entorno del proyecto (REEMPLAZAR LOS VALORES < >)
     env:
-      AWS_REGION: <TU_REGION_AWS> # EJ: us-east-1
-      S3_BUCKET_SCRIPTS: <TU_BUCKET_SCRIPTS_GLUE> # EJ: sakila-etl-scripts-2025
+      S3_BUCKET_SCRIPTS: scripts-glue2
       GLUE_JOB_NAME: sakila-etl-fact-rental
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
-      CONNECTION_NAME: sakila-rds-connection
+      CONNECTION_NAME: Jdbc connection
       GLUE_VERSION: 4.0
       
       # INFORMACION SENSIBLE REQUERIDA PARA CREACION DEL JOB
-      IAM_ROLE_ARN: arn:aws:iam::<TU_ACCOUNT_ID>:role/<TU_ROL_DE_GLUE> 
+      IAM_ROLE_ARN: ${{secrets.AWS_GLUE_ROLE_ARN}}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +68,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} 
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       # -----------------------------------------------
       # 2a. Subir el script versionado a S3

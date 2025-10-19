@@ -83,6 +83,6 @@ def main():
     job.commit()
     spark.stop()
 
-# Punto de entrada para la ejecución de AWS Glue
+# Punto de entrada para la ejecución de Glue
 if __name__ == '__main__':
     main()
