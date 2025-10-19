@@ -28,8 +28,7 @@ datasource = glueContext.create_dynamic_frame.from_options(
     connection_options={
         # 'useConnectionProperties': 'true' le indica a Glue que use la configuración de la conexión nombrada.
         "useConnectionProperties": "true", 
-        # 'connectionName': Glue lo utiliza para buscar la configuración, 
-        # incluyendo el secreto asociado en Secrets Manager.
+        # 'connectionName': Glue lo utiliza para buscar la configuración, incluyendo el secreto asociado en Secrets Manager.
         "connectionName": CONNECTION_NAME, 
         "dbtable": DB_TABLE,
         "query": f"""
