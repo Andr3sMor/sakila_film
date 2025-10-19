@@ -27,7 +27,7 @@ def test_fact_rental_transformation(spark):
 
     PROCESSING_DATE = "2025-10-18"
 
-    # --- 2. Simular la transformación (como en el script original) ---
+    # --- 2. Simular la transformación ---
     from pyspark.sql.functions import col, date_format
 
     df_fact_rental = (

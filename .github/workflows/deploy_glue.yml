@@ -4,8 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      # Solo se dispara si hay cambios relevantes en los scripts o tests
-      - 'glue_scripts/etl_rental.py' 
+      - 'glue_scripts/etl_rental.py'
       - 'tests/test_etl_rental.py'
       - 'requirements.txt'
   pull_request:
@@ -13,9 +12,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # -----------------------------
-  # 1. Tests de Integración Funcional (ETL)
-  # -----------------------------
   test:
     name: Run ETL Integration Test
     runs-on: ubuntu-latest
@@ -24,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9" 
+          python-version: "3.9"
           
       - name: Set up Test Environment
         run: |
@@ -38,18 +34,16 @@ jobs:
           export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
           pytest tests/test_etl_rental.py -v
 
-  # -----------------------------
-  # 2. Despliegue de AWS Glue Job
-  # -----------------------------
   deploy-glue:
     name: Deploy AWS Glue Script
     runs-on: ubuntu-latest
-    needs: test # Solo se ejecuta si los tests son exitosos
+    needs: test
     
     env:
-      AWS_REGION: us-east-1 
+      AWS_REGION: us-east-1
       S3_BUCKET_SCRIPTS: scripts-glue2
       GLUE_JOB_NAME: sakila-etl-fact-rental
+      GLUE_ROLE_ARN: arn:aws:iam::<TU_ID_DE_CUENTA>:role/AWSGlueServiceRole-GlueJob
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
 
     steps:
@@ -63,9 +57,6 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # -----------------------------
-      # Subir el script a S3 (artefacto versionado)
-      # -----------------------------
       - name: Upload Glue Script to S3
         id: upload
         run: |
@@ -78,30 +69,44 @@ jobs:
           echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
 
       # -----------------------------
-      # Actualizar la definición del AWS Glue Job con rol dinámico
+      # Crear o actualizar el Glue Job según exista o no
       # -----------------------------
-      - name: Update AWS Glue Job Definition (Safe)
+      - name: Create or Update Glue Job
         run: |
-          echo "Actualizando Glue Job: ${{ env.GLUE_JOB_NAME }} con script: ${{ env.GLUE_SCRIPT_PATH }}"
-          
-          # Obtener el rol actual del Glue Job
-          ROLE=$(aws glue get-job \
-            --job-name ${{ env.GLUE_JOB_NAME }} \
-            --query 'Job.Role' \
-            --output text)
+          echo "Procesando Glue Job: ${{ env.GLUE_JOB_NAME }} con script: ${{ env.GLUE_SCRIPT_PATH }}"
 
-          echo "Usando Role existente: $ROLE"
-          
-          # Actualizar la definición con el rol y nuevo script
-          aws glue update-job \
+          set +e
+          JOB_EXISTS=$(aws glue get-job \
             --job-name ${{ env.GLUE_JOB_NAME }} \
-            --job-update "{
-              \"Role\": \"$ROLE\",
-              \"Command\": {
-                \"Name\": \"glueetl\",
-                \"ScriptLocation\": \"${{ env.GLUE_SCRIPT_PATH }}\"
-              }
-            }"
+            --query 'Job.Name' \
+            --output text 2>/dev/null)
+          set -e
+
+          if [ "$JOB_EXISTS" == "None" ] || [ -z "$JOB_EXISTS" ]; then
+            echo "Job no existe. Creándolo por primera vez..."
+            aws glue create-job \
+              --name ${{ env.GLUE_JOB_NAME }} \
+              --role ${{ env.GLUE_ROLE_ARN }} \
+              --command "Name=glueetl,ScriptLocation=${{ env.GLUE_SCRIPT_PATH }},PythonVersion=3" \
+              --glue-version "4.0" \
+              --default-arguments '{"--job-language":"python","--enable-metrics":"true"}'
+          else
+            echo "Job encontrado. Actualizando script..."
+            ROLE=$(aws glue get-job \
+              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --query 'Job.Role' \
+              --output text)
+
+            aws glue update-job \
+              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --job-update "{
+                \"Role\": \"$ROLE\",
+                \"Command\": {
+                  \"Name\": \"glueetl\",
+                  \"ScriptLocation\": \"${{ env.GLUE_SCRIPT_PATH }}\"
+                }
+              }"
+          fi
 
       - name: Deployment Completed
         run: echo "Despliegue continuo de Glue Job completado exitosamente."
