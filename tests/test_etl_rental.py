@@ -1,78 +1,81 @@
-# tests/test_etl_rental.py
 import pytest
 from unittest.mock import MagicMock, patch, call
-from datetime import datetime
-
-# Importamos el script ETL directamente
-# Asegúrate de que el path de importación sea correcto desde tu carpeta /tests
 import sys
+
+# ==========================================================
+# PASO 1: MOCKEAR los módulos de AWS Glue para Test Unitario
+# Esto permite que el script ETL se importe sin errores.
+# ==========================================================
+sys.modules['awsglue'] = MagicMock()
+sys.modules['awsglue.context'] = MagicMock()
+sys.modules['awsglue.utils'] = MagicMock()
+sys.modules['pyspark.context'] = MagicMock()
+# Mockear las clases exactas que el ETL importa
+sys.modules['awsglue.context'].GlueContext = MagicMock()
+sys.modules['awsglue.utils'].getResolvedOptions = MagicMock()
+sys.modules['pyspark.context'].SparkContext = MagicMock()
+# Mockear las funciones de PySpark (col, lit, date_format) para que no fallen al ser llamadas
+from pyspark.sql import functions
+for attr in ['col', 'lit', 'to_date', 'date_format']:
+    setattr(functions, attr, MagicMock(return_value=MagicMock()))
+
+
+# Asegura el path de importación
 sys.path.append('glue_scripts')
-from etl_rental import glueContext, getResolvedOptions # Importamos las funciones necesarias (simuladas)
+# Importa el script ETL
+from etl_rental import glueContext, getResolvedOptions 
 
-# --- Mocking del Entorno AWS Glue/Spark ---
 
-# 1. Mock de los argumentos de entrada de AWS Glue
+# --- Configuraciones del Test Unitario ---
+
 @patch('etl_rental.getResolvedOptions', return_value={
     'JOB_NAME': 'test-job',
     'PROCESSING_DATE': '2025-10-17' # Fecha de prueba
 })
-# 2. Mock del contexto de Spark y Glue
 @patch('etl_rental.SparkContext.getOrCreate')
-@patch('etl_rental.GlueContext', autospec=True)
-# 3. Mock de la salida de datos de la base de datos (RDS)
 @patch('etl_rental.glueContext.create_dynamic_frame.from_options')
-def test_etl_rental_processing_date_and_output(
-    mock_from_options, mock_glue_context, mock_spark_context, mock_get_resolved_options):
+def test_etl_rental_pipeline_calls(
+    mock_from_options, mock_spark_context, mock_get_resolved_options):
     
-    # Configuración de Mocks:
+    # Simular la salida de la lectura JDBC (DynamicFrame)
+    mock_dynamic_frame = MagicMock()
 
-    # 3.1 Simular los datos leídos de RDS (Datos de prueba para Fact_rental)
-    # Se simula un DataFrame de Spark con las columnas esperadas después de la lectura
+    # Simular que el DynamicFrame se convierte a Spark DataFrame (df_rental)
     mock_df_input = MagicMock()
-    mock_df_input.columns = [
-        "rental_id", "rental_date", "inventory_id", "customer_id", 
-        "staff_id", "last_update", "amount", "payment_date"
-    ]
-    # Usamos una estructura de datos simple para evitar la complejidad de PySpark
-    mock_df_input.toDF.return_value = mock_df_input 
+    mock_dynamic_frame.toDF.return_value = mock_df_input
+    mock_from_options.return_value = mock_dynamic_frame
 
-    # 3.2 La lectura de RDS debe retornar este mock de datos
-    mock_from_options.return_value = mock_df_input
-
-    # 3.3 Mockear el método .write para verificar las llamadas finales
+    # Simular la cadena de transformaciones y la escritura final
+    # Hacemos que cada paso de la cadena de Spark devuelva un MagicMock
+    mock_df_input.withColumn.return_value.withColumn.return_value.select.return_value.withColumn.return_value = mock_df_input
     mock_write = MagicMock()
     mock_df_input.write = mock_write
     
-    # Ejecución del Script ETL
-    with patch('etl_rental.spark.stop'): # Evitar que el script termine la sesión de Spark
+    # Ejecución de la Unidad de Código ETL
+    with patch('etl_rental.spark.stop'):
         import etl_rental
 
-    # --- Verificaciones ---
+    # --- VERIFICACIONES (ASSERTS) ---
 
-    # 1. Verificar la llamada a la lectura incremental (RDS)
-    # Se verifica que el filtro (WHERE clause) para la fecha se pasó correctamente a RDS
-    expected_predicate = "DATE(rental_date) = '2025-10-17'"
-    
-    # Se verifica que se llamó a la lectura de datos
+    # 1. VERIFICACIÓN DE LA LECTURA INCREMENTAL (E de ETL)
     mock_from_options.assert_called_once()
     
-    # Se verifica que el 'query' dentro de connection_options contenga la fecha correcta
+    # 1a. Verificar la conexión JDBC y el filtro incremental
+    expected_predicate = "DATE(r.rental_date) = '2025-10-17'"
     actual_query = mock_from_options.call_args[1]['connection_options']['query']
-    assert expected_predicate in actual_query, "El predicado de fecha incremental no se aplicó correctamente en la query."
-    assert "sakila-rds-connection" in mock_from_options.call_args[1]['connection_options']['connectionName'], "El nombre de la conexión JDBC no es el esperado."
-
-    # 2. Verificar la llamada a la escritura Parquet (S3)
-    # Se verifica que la escritura final se hizo con los parámetros correctos
     
-    # Verificación de que se llama a .write con el modo 'append' y formato 'parquet'
+    assert "sakila-rds-connection" in mock_from_options.call_args[1]['connection_options']['connectionName'], "Error: Nombre de conexión JDBC incorrecto."
+    assert expected_predicate in actual_query, "Error: El predicado incremental de fecha no se aplicó en la query."
+
+    # 2. VERIFICACIÓN DE LA ESCRITURA EN S3 (L de ETL)
+    
+    # 2a. Verificar la secuencia final de escritura (mode, format, partitionBy, save)
     mock_write.mode.assert_called_once_with("append")
     mock_write.mode().format.assert_called_once_with("parquet")
-    
-    # Verificación del particionamiento
     mock_write.mode().format().partitionBy.assert_called_once_with("partition_date")
     
-    # Verificación de la ruta de S3
+    # 2b. Verificar la ruta de S3
     expected_s3_path = "s3://cmjm-datalake/facts/fact_rental/"
     mock_write.mode().format().partitionBy().save.assert_called_once_with(expected_s3_path)
     
-    print("\nTest de Integración Funcional (Mocked) Aprobado.") 
+    print("\nTest Unitario de Pipeline Aprobado.")
