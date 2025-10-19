@@ -26,7 +26,7 @@ print(f"-> Leyendo la tabla {DB_TABLE} con filtro: {predicate}")
 datasource = glueContext.create_dynamic_frame.from_options(
     connection_type="jdbc",
     connection_options={
-        # 'useConnectionProperties': 'true' le indica a Glue que use la configuración de la conexión dada.
+        # 'useConnectionProperties': 'true' le indica a Glue que use la configuración de la conexión.
         "useConnectionProperties": "true", 
         # 'connectionName': Glue lo utiliza para buscar la configuración, incluyendo el secreto asociado en Secrets Manager.
         "connectionName": CONNECTION_NAME, 

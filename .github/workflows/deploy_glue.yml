@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'glue_scripts/etl_rental.py'
+      - 'glue_scripts/etl_rental.py' 
       - 'tests/test_etl_rental.py'
       - 'requirements.txt'
   pull_request:
@@ -12,12 +12,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  # --------------------------------------------------
+  # 1. Tests de Integración del ETL
+  # --------------------------------------------------
   test:
-    name: Run ETL Rental Test
+    name: Run ETL Integration Test
     runs-on: ubuntu-latest
     
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
@@ -34,13 +38,16 @@ jobs:
           export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
           pytest tests/test_etl_rental.py -v
 
+  # --------------------------------------------------
+  # 2. Despliegue del Script de Glue
+  # --------------------------------------------------
   deploy-glue:
     name: Deploy AWS Glue Script
     runs-on: ubuntu-latest
-    needs: test
+    needs: test  # Solo si los tests pasan
     
     env:
-      AWS_REGION: us-east-1
+      AWS_REGION: us-east-1 
       S3_BUCKET_SCRIPTS: scripts-glue2
       GLUE_JOB_NAME: sakila-etl-fact-rental
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
@@ -56,73 +63,91 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # -----------------------------------------------
+      # Subir el script versionado a S3
+      # -----------------------------------------------
       - name: Upload Glue Script to S3
         id: upload
         run: |
           VERSION=$(date +%Y%m%d%H%M%S)
           S3_LOCATION="s3://${{ env.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$(basename ${{ env.SCRIPT_LOCAL_PATH }})"
           
-          echo "Subiendo ${{ env.SCRIPT_LOCAL_PATH }} a $S3_LOCATION"
+          echo "Subiendo script a $S3_LOCATION"
           aws s3 cp ${{ env.SCRIPT_LOCAL_PATH }} $S3_LOCATION
           
           echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
 
-      - name: Create or Update Glue Job (Safe)
+      # -----------------------------------------------
+      # Actualizar el Glue Job usando su rol existente
+      # -----------------------------------------------
+      - name: Update AWS Glue Job Definition (Safe)
         run: |
-          echo "Procesando Glue Job: ${{ env.GLUE_JOB_NAME }} con script: ${{ env.GLUE_SCRIPT_PATH }}"
-
-          set +e
-          JOB_EXISTS=$(aws glue get-job \
-            --job-name ${{ env.GLUE_JOB_NAME }} \
-            --query 'Job.Name' \
-            --output text 2>/dev/null)
-          set -e
-
-          if [ "$JOB_EXISTS" == "None" ] || [ -z "$JOB_EXISTS" ]; then
-            echo "Job no existe. Creándolo por primera vez..."
-            aws glue create-job \
-              --name ${{ env.GLUE_JOB_NAME }} \
-              --role "${{ secrets.AWS_GLUE_ROLE_ARN }}" \
-              --command "Name=glueetl,ScriptLocation=${{ env.GLUE_SCRIPT_PATH }},PythonVersion=3" \
-              --glue-version "4.0" \
-              --default-arguments '{"--job-language":"python","--enable-metrics":"true"}'
-          else
-            echo "Job encontrado. Actualizando script..."
-            ROLE=$(aws glue get-job \
-              --job-name ${{ env.GLUE_JOB_NAME }} \
-              --query 'Job.Role' \
-              --output text)
-
-            aws glue update-job \
-              --job-name ${{ env.GLUE_JOB_NAME }} \
-              --job-update "{
-                \"Role\": \"$ROLE\",
-                \"Command\": {
-                  \"Name\": \"glueetl\",
-                  \"ScriptLocation\": \"${{ env.GLUE_SCRIPT_PATH }}\"
-                }
-              }"
-          fi
-
-      # -----------------------------
-      # Ejecutar el Glue Job para 2 días consecutivos (hoy y ayer)
-      # -----------------------------
-      - name: Run Glue Job for Two Processing Dates
-        run: |
-          echo "Ejecutando Glue Job para dos días consecutivos..."
+          echo "Actualizando Glue Job: ${{ env.GLUE_JOB_NAME }}"
           
+          ROLE=$(aws glue get-job \
+            --job-name ${{ env.GLUE_JOB_NAME }} \
+            --query 'Job.Role' \
+            --output text)
+
+          echo "Usando Role existente: $ROLE"
+          
+          aws glue update-job \
+            --job-name ${{ env.GLUE_JOB_NAME }} \
+            --job-update "{
+              \"Role\": \"$ROLE\",
+              \"Command\": {
+                \"Name\": \"glueetl\",
+                \"ScriptLocation\": \"${{ env.GLUE_SCRIPT_PATH }}\"
+              }
+            }"
+
+      # -----------------------------------------------
+      # Ejecutar el Glue Job para dos días consecutivos
+      # -----------------------------------------------
+      - name: Run Glue Job for Two Processing Dates (Sequential)
+        run: |
+          echo "Ejecutando Glue Job para dos días consecutivos (ayer y hoy)..."
+
           TODAY=$(date +%Y-%m-%d)
           YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
 
-          echo "Día actual: $TODAY"
-          echo "Día anterior: $YESTERDAY"
-
           for DATE in $YESTERDAY $TODAY; do
             echo "Lanzando Glue Job para fecha $DATE ..."
-            aws glue start-job-run \
+            JOB_RUN_ID=$(aws glue start-job-run \
               --job-name ${{ env.GLUE_JOB_NAME }} \
-              --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}'
+              --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}' \
+              --query 'JobRunId' \
+              --output text)
+
+            echo "JobRunId: $JOB_RUN_ID"
+
+            echo "Esperando a que finalice la ejecución para $DATE ..."
+            MAX_WAIT_MINUTES=30
+            WAITED=0
+            STATE="STARTING"
+
+            while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ]; do
+              if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
+                echo "Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min). Cancelando job."
+                exit 1
+              fi
+              sleep 60
+              WAITED=$((WAITED+1))
+              STATE=$(aws glue get-job-run \
+                --job-name ${{ env.GLUE_JOB_NAME }} \
+                --run-id "$JOB_RUN_ID" \
+                --query 'JobRun.JobRunState' \
+                --output text)
+              echo "Estado actual ($DATE): $STATE (min: $WAITED)"
+            done
+
+            if [ "$STATE" != "SUCCEEDED" ]; then
+              echo "El job falló para la fecha $DATE con estado $STATE"
+              exit 1
+            fi
+
+            echo "job completado exitosamente para la fecha $DATE"
           done
 
       - name: Deployment Completed
-        run: echo "Despliegue y ejecución de Glue Job completado exitosamente para ambos días."
+        run: echo "Despliegue y ejecución de Glue completados exitosamente."
