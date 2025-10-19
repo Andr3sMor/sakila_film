@@ -13,7 +13,7 @@ on:
 
 jobs:
   test:
-    name: Run ETL Integration Test
+    name: Run ETL Rental Test
     runs-on: ubuntu-latest
     
     steps:
@@ -104,5 +104,25 @@ jobs:
               }"
           fi
 
+      # -----------------------------
+      # Ejecutar el Glue Job para 2 días consecutivos (hoy y ayer)
+      # -----------------------------
+      - name: Run Glue Job for Two Processing Dates
+        run: |
+          echo "Ejecutando Glue Job para dos días consecutivos..."
+          
+          TODAY=$(date +%Y-%m-%d)
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+
+          echo "Día actual: $TODAY"
+          echo "Día anterior: $YESTERDAY"
+
+          for DATE in $YESTERDAY $TODAY; do
+            echo "Lanzando Glue Job para fecha $DATE ..."
+            aws glue start-job-run \
+              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}'
+          done
+
       - name: Deployment Completed
-        run: echo "Despliegue continuo de Glue Job completado exitosamente."
+        run: echo "Despliegue y ejecución de Glue Job completado exitosamente para ambos días."
