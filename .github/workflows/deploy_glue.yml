@@ -131,7 +131,7 @@ jobs:
                 echo "Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min). Cancelando job."
                 exit 1
               fi
-              sleep 60
+              sleep 120
               WAITED=$((WAITED+1))
               STATE=$(aws glue get-job-run \
                 --job-name ${{ env.GLUE_JOB_NAME }} \
