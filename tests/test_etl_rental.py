@@ -1,83 +1,89 @@
-from pyspark.context import SparkContext
-from awsglue.context import GlueContext
-from pyspark.sql.functions import col, lit, date_format 
-from awsglue.utils import getResolvedOptions
+import pytest
+from unittest.mock import MagicMock, patch, call
 import sys
+from pyspark.sql import functions 
 
-# 1. Inicialización de Contexto de Glue (AHORA ESTOS SON OBJETOS GLOBALES VACÍOS, SE INICIALIZAN EN main)
-sc = None
-glueContext = None
-spark = None
+# 1a. Crear Módulos Falsos para AWS Glue
+sys.modules['awsglue'] = MagicMock()
+sys.modules['awsglue.context'] = MagicMock()
+sys.modules['awsglue.utils'] = MagicMock()
+sys.modules['pyspark.context'] = MagicMock()
 
-# --- Función Principal que Contiene TODA la Lógica de Ejecución ---
-def main():
-    global sc, glueContext, spark # Referenciar a los objetos globales
+# 1b. Crear Mocks de las Clases y Funciones
+# Esto simula las clases que se importan en el script ETL, satisfaciendo a Python
+sys.modules['awsglue.context'].GlueContext = MagicMock()
+sys.modules['awsglue.utils'].getResolvedOptions = MagicMock()
+sys.modules['pyspark.context'].SparkContext = MagicMock()
 
-    # Inicialización REAL (Solo se llama cuando se ejecuta main())
-    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'PROCESSING_DATE']) 
-    sc = SparkContext.getOrCreate()
-    glueContext = GlueContext(sc)
-    spark = glueContext.spark_session
+# 1c. Mockear todas las funciones de PySpark que se usan a nivel de código
+# Esto evita que PySpark compruebe el SparkContext al importar funciones como col().
+for attr in ['col', 'lit', 'to_date', 'date_format']:
+    setattr(functions, attr, MagicMock(return_value=MagicMock()))
+
+
+# ==========================================================
+# 2. IMPORTACIÓN DEL CÓDIGO ETL 
+# ==========================================================
+# Asegura el path de importación
+sys.path.append('glue_scripts')
+# Importa la función principal del ETL
+from etl_rental import main as etl_main
+# Importa los objetos globales que se inicializarán dentro de main()
+from etl_rental import glueContext, getResolvedOptions, spark 
+
+
+# --- Configuraciones del Test Unitario ---
+
+@patch('etl_rental.getResolvedOptions', return_value={
+    'JOB_NAME': 'test-job',
+    'PROCESSING_DATE': '2025-10-17' # Fecha de prueba
+})
+@patch('etl_rental.SparkContext.getOrCreate')
+@patch('etl_rental.GlueContext', autospec=True)
+def test_etl_rental_pipeline_calls(
+    mock_glue_context_class, mock_spark_context_get_or_create, mock_get_resolved_options):
     
-    # --- PARÁMETROS CLAVE ---
-    PROCESSING_DATE = args['PROCESSING_DATE'] 
-    S3_TARGET_PATH = "s3://cmjm-datalake/facts/fact_rental/"
-    CONNECTION_NAME = "sakila-rds-connection" 
-    DB_TABLE = "rental"
+    # 1. Configurar Mocks
 
-    # 2. Definir el Predicado de Filtrado (Lectura Incremental)
-    predicate = f"DATE(rental_date) = '{PROCESSING_DATE}'"
+    # Mock del objeto glueContext INSTANCIADO
+    mock_glue_context_instance = mock_glue_context_class.return_value
+    mock_from_options = mock_glue_context_instance.create_dynamic_frame.from_options
+    
+    # Simular la cadena de Spark
+    mock_df_input = MagicMock()
+    
+    # Configuramos la cadena de mocks
+    mock_from_options.return_value.toDF.return_value = mock_df_input
+    mock_df_input.write = MagicMock()
+    
+    # Configuramos los mocks para la cadena de transformaciones (simular el .withColumn().select()...)
+    mock_df_input.withColumn.return_value.withColumn.return_value.select.return_value.withColumn.return_value = mock_df_input
 
-    print(f"-> Leyendo la tabla {DB_TABLE} con filtro: {predicate}")
+    # --- EJECUCIÓN DEL CÓDIGO ETL ---
+    # Llamamos a la función main()
+    etl_main()
 
-    # 3. Lectura desde RDS con 'Pushdown Predicate'
-    datasource = glueContext.create_dynamic_frame.from_options(
-        connection_type="jdbc",
-        connection_options={
-            "useConnectionProperties": "true", 
-            "connectionName": CONNECTION_NAME, 
-            "dbtable": DB_TABLE,
-            "query": f"""
-                SELECT 
-                    r.rental_id, r.rental_date, r.inventory_id, r.customer_id, r.staff_id, r.last_update, 
-                    p.amount, p.payment_date
-                FROM rental r
-                JOIN payment p ON r.rental_id = p.rental_id
-                WHERE DATE(r.rental_date) = '{PROCESSING_DATE}'
-            """
-        },
-        transformation_ctx="datasource"
-    )
+    # --- VERIFICACIONES (ASSERTS) ---
 
-    df_rental = datasource.toDF()
+    # 1. VERIFICACIÓN DE LA LECTURA INCREMENTAL
+    mock_from_options.assert_called_once()
+    
+    # 1a. Verificar la conexión JDBC y el filtro incremental
+    expected_predicate = "DATE(rental_date) = '2025-10-17'"
+    actual_query = mock_from_options.call_args[1]['connection_options']['query']
+    
+    assert "sakila-rds-connection" in mock_from_options.call_args[1]['connection_options']['connectionName']
+    assert expected_predicate in actual_query, f"Error: El predicado incremental de fecha no se aplicó correctamente. Query: {actual_query}"
 
-    # 4. Transformaciones para el Modelo Dimensional
-    # ESTAS LÍNEAS YA NO FALLARÁN PORQUE EL SPARK CONTEXT ESTÁ ACTIVO DENTRO DE main()
-    df_fact_rental = df_rental.withColumn(
-        "date_id", 
-        date_format(col("rental_date"), "yyyyMMdd").cast("int")
-    ).withColumn(
-        "film_id", 
-        lit(1)
-    ).select(
-        "amount",
-        "rental_date",
-        "date_id",
-        "customer_id",
-        col("film_id").alias("film_id"),
-        col("staff_id").alias("store_id")
-    ).withColumn(
-        "partition_date", 
-        lit(PROCESSING_DATE)
-    )
-
-    # 5. Escritura en S3 en formato Parquet y Particionamiento
-    df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
-
-    print(f"-> Fact_rental cargado y particionado para el día: {PROCESSING_DATE}")
-
-    spark.stop()
-
-# Punto de entrada para la ejecución real del Glue Job
-if __name__ == '__main__':
-    main()
+    # 2. VERIFICACIÓN DE LA ESCRITURA EN S3
+    mock_df_input.write.mode.assert_called_once_with("append")
+    mock_df_input.write.mode().format.assert_called_once_with("parquet")
+    mock_df_input.write.mode().format().partitionBy.assert_called_once_with("partition_date")
+    
+    expected_s3_path = "s3://cmjm-datalake/facts/fact_rental/"
+    mock_df_input.write.mode().format().partitionBy().save.assert_called_once_with(expected_s3_path)
+    
+    # Verificar que Spark se apagó
+    mock_spark_context_get_or_create.return_value.stop.assert_called_once()
+    
+    print("\nTest Unitario de Pipeline Aprobado.")
