@@ -32,7 +32,7 @@ jobs:
           python3 -m venv env-test
           source env-test/bin/activate
           # Instala dependencias para el test (pytest, mock, boto3, etc.)
-          pip install pytest mock boto3 botocore 
+          pip install pytest mock boto3 botocore pyspark
 
       - name: Run ETL Tests
         run: |
