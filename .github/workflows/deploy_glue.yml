@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'glue_scripts/etl_rental.py' 
+      - 'glue_scripts/etl_rental.py'
       - 'tests/test_etl_rental.py'
       - 'requirements.txt'
   pull_request:
@@ -20,18 +20,12 @@ jobs:
       AWS_REGION: us-east-1
       GLUE_JOB_NAME: glue-rental-job
       S3_SCRIPT_PATH: s3://cmjm-datalake/scripts/etl_rental.py
-      GLUE_ROLE: arn:aws:iam::<TU_ACCOUNT_ID>:role/AWSGlueServiceRoleDefault  # 👈 reemplaza con tu ARN real
+      GLUE_ROLE_NAME: AWSGlueServiceRoleDefault
 
     steps:
-      # -----------------------------
-      # Checkout del repositorio
-      # -----------------------------
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
-      # -----------------------------
-      # Configurar credenciales de AWS
-      # -----------------------------
       - name: Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -40,55 +34,27 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # -----------------------------
-      # 3. Subir el script actualizado a S3
-      # -----------------------------
       - name: Subir script de Glue al bucket S3
         run: |
           echo "Subiendo etl_rental.py al bucket..."
           aws s3 cp glue_scripts/etl_rental.py ${{ env.S3_SCRIPT_PATH }} --region ${{ env.AWS_REGION }}
           echo "Script actualizado en ${{ env.S3_SCRIPT_PATH }}"
 
-      # -----------------------------
-      # 4. Crear o actualizar el Glue Job
-      # -----------------------------
-      - name: Crear o actualizar Glue Job con el nuevo script
+      - name: Crear o actualizar Glue Job
         run: |
           echo "Verificando existencia del Glue Job: ${{ env.GLUE_JOB_NAME }}"
-
-          set +e
-          ROLE=$(aws glue get-job \
-            --job-name ${{ env.GLUE_JOB_NAME }} \
-            --query 'Job.Role' --output text 2>/dev/null)
-          EXISTE=$?
           set -e
 
-          if [ $EXISTE -ne 0 ]; then
-            echo "El Glue Job no existe. Creando uno nuevo..."
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${{ env.GLUE_ROLE_NAME }}"
+          echo "Usando ROLE_ARN: $ROLE_ARN"
 
-            aws glue create-job \
-              --name ${{ env.GLUE_JOB_NAME }} \
-              --role ${{ env.GLUE_ROLE }} \
-              --command "{
-                \"Name\": \"glueetl\",
-                \"ScriptLocation\": \"${{ env.S3_SCRIPT_PATH }}\",
-                \"PythonVersion\": \"3\"
-              }" \
-              --glue-version "4.0" \
-              --default-arguments "{
-                \"--job-language\": \"python\",
-                \"--enable-continuous-cloudwatch-log\": \"true\",
-                \"--enable-s3-parquet-optimized-committer\": \"true\"
-              }" \
-              --max-capacity 2
-
-            echo "Glue Job creado exitosamente."
-          else
-            echo "Glue Job encontrado. Actualizando con nuevo script..."
+          if aws glue get-job --job-name "${{ env.GLUE_JOB_NAME }}" >/dev/null 2>&1; then
+            echo "Job existente, actualizando script y configuración..."
             aws glue update-job \
-              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --job-name "${{ env.GLUE_JOB_NAME }}" \
               --job-update "{
-                \"Role\": \"$ROLE\",
+                \"Role\": \"$ROLE_ARN\",
                 \"Command\": {
                   \"Name\": \"glueetl\",
                   \"ScriptLocation\": \"${{ env.S3_SCRIPT_PATH }}\",
@@ -102,12 +68,27 @@ jobs:
                 },
                 \"MaxCapacity\": 2
               }"
-            echo "Glue Job actualizado correctamente."
+          else
+            echo "El Glue Job no existe. Creando uno nuevo..."
+            aws glue create-job \
+              --name "${{ env.GLUE_JOB_NAME }}" \
+              --role "$ROLE_ARN" \
+              --command "{
+                \"Name\": \"glueetl\",
+                \"ScriptLocation\": \"${{ env.S3_SCRIPT_PATH }}\",
+                \"PythonVersion\": \"3\"
+              }" \
+              --glue-version "4.0" \
+              --default-arguments "{
+                \"--job-language\": \"python\",
+                \"--enable-continuous-cloudwatch-log\": \"true\",
+                \"--enable-s3-parquet-optimized-committer\": \"true\"
+              }" \
+              --max-capacity 2
           fi
 
-      # -----------------------------
-      #Ejecutar Glue Job para ayer y hoy
-      # -----------------------------
+          echo "Glue Job listo."
+
       - name: Ejecutar Glue Job para ayer y hoy
         run: |
           echo "Ejecutando Glue Job para dos fechas (ayer y hoy)..."
@@ -120,17 +101,16 @@ jobs:
             echo "Lanzando Glue Job para fecha $FECHA ..."
             
             JOB_RUN_ID=$(aws glue start-job-run \
-              --job-name ${{ env.GLUE_JOB_NAME }} \
+              --job-name "${{ env.GLUE_JOB_NAME }}" \
               --arguments "{\"--PROCESSING_DATE\":\"$FECHA\"}" \
               --query 'JobRunId' --output text)
 
             echo "JobRunId: $JOB_RUN_ID"
             echo "Esperando a que finalice la ejecución para $FECHA ..."
 
-            # Esperar que termine cada job antes de lanzar el siguiente
             while true; do
               STATUS=$(aws glue get-job-run \
-                --job-name ${{ env.GLUE_JOB_NAME }} \
+                --job-name "${{ env.GLUE_JOB_NAME }}" \
                 --run-id "$JOB_RUN_ID" \
                 --query 'JobRun.JobRunState' --output text)
               
@@ -147,9 +127,6 @@ jobs:
             done
           done
 
-      # -----------------------------
-      # 6. Confirmación final
-      # -----------------------------
       - name: Despliegue exitoso
         if: success()
         run: echo "Todos los Glue Jobs se ejecutaron exitosamente (ayer y hoy)."
