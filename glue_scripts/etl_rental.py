@@ -22,7 +22,7 @@ def main():
     job = Job(glueContext)
     job.init(args['JOB_NAME'], args)
 
-    # --- PARÁMETROS CLAVE ---
+    # --- PARÁMETROS ---
     PROCESSING_DATE = args['--PROCESSING_DATE']
     S3_TARGET_PATH = "s3://cmjm-datalake/facts/fact_rental/"
     CONNECTION_NAME = "sakila-rds-connection" 
