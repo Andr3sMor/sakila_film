@@ -4,12 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      # Se activa solo cuando el código ETL o de prueba cambian
       - glue_scripts/etl_rental.py
       - tests/test_etl_rental.py
       - requirements.txt
   pull_request:
     branches: [main]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   # --------------------------------------------------
@@ -48,7 +49,7 @@ jobs:
     
     # Define variables de entorno del proyecto (Secrets y Constantes)
     env:
-      S3_BUCKET_SCRIPTS: ${{ secrets.S3_BUCKET_SCRIPTS }} # EJ: sakila-etl-scripts-2025
+      S3_BUCKET_SCRIPTS: ${{ secrets.S3_BUCKET_SCRIPTS }} # EJ: scripts-glue2
       GLUE_JOB_NAME: sakila-etl-fact-rental
       SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
       CONNECTION_NAME: ${{ secrets.CONNECTION_NAME }} # EJ: sakila-rds-connection
@@ -85,7 +86,7 @@ jobs:
           echo GLUE_SCRIPT_PATH=$S3_LOCATION >> $GITHUB_ENV
 
       # -----------------------------------------------
-      # 2b. Crear o Actualizar la Definicion del Glue Job
+      # 2b. Crear o Actualizar la Definición del Glue Job
       # -----------------------------------------------
       - name: Create or Update AWS Glue Job Definition
         run: |
@@ -124,18 +125,19 @@ jobs:
           fi
 
       # -----------------------------------------------
-      # 2c. Ejecutar el Glue Job para los dos dias (Prueba de Incrementalidad y Concurrencia)
+      # 2c. Ejecutar el Glue Job para los dos días (Prueba de Incrementalidad y Concurrencia)
       # -----------------------------------------------
       - name: Run Glue Job for Two Processing Dates (Sequential Wait)
         run: |
           echo Ejecutando Glue Job para dos días de prueba secuencialmente...
           
+          # Asignar las fechas correctamente
           TODAY=$(date +%Y-%m-%d)
-          YESTERDAY=$(date -d yesterday +%Y-%m-%d)
-          
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+
           MAX_WAIT_MINUTES=15
           
-          for DATE in $YESTERDAY $TODAY; do
+          for DATE in "$YESTERDAY" "$TODAY"; do
             echo Lanzando Glue Job para fecha $DATE
             JOB_RUN_ID=$(aws glue start-job-run \
               --job-name ${{ env.GLUE_JOB_NAME }} \
