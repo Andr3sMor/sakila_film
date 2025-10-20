@@ -56,7 +56,9 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} 
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # --------------------------------------------------
       # Subir el script a S3
+      # --------------------------------------------------
       - name: Upload Glue Script to S3
         id: upload
         run: |
@@ -76,10 +78,13 @@ jobs:
           
           echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
 
+      # --------------------------------------------------
       # Crear o Actualizar la Definición del Glue Job
+      # --------------------------------------------------
       - name: Create or Update AWS Glue Job Definition
         run: |
           JOB_NAME=sakila-etl-fact-rental
+          echo "JOB_NAME=$JOB_NAME" >> $GITHUB_ENV   # 🔥 Permite usarlo en pasos siguientes
           SCRIPT_PATH=${{ env.GLUE_SCRIPT_PATH }}
 
           if [ -z "${{ secrets.JDBC_CONNECTION_NAME }}" ]; then
@@ -140,6 +145,7 @@ jobs:
         run: |
           echo "Ejecutando Glue Job para dos días de prueba secuencialmente..."
           
+          JOB_NAME=${{ env.JOB_NAME }}   # ✅ Recupera la variable persistente
           TODAY=$(date +%Y-%m-%d)
           YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
           MAX_WAIT_MINUTES=15
@@ -147,7 +153,7 @@ jobs:
           for DATE in "$YESTERDAY" "$TODAY"; do
             echo "Lanzando Glue Job para fecha $DATE"
             JOB_RUN_ID=$(aws glue start-job-run \
-              --job-name $JOB_NAME \
+              --job-name "$JOB_NAME" \
               --region ${{ secrets.AWS_REGION }} \
               --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}' \
               --query JobRunId \
@@ -162,13 +168,13 @@ jobs:
             while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
               if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
                 echo "Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min)."
-                aws glue stop-job-run --job-name $JOB_NAME --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
+                aws glue stop-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
                 exit 1
               fi
               sleep 60
               WAITED=$((WAITED+1))
               STATE=$(aws glue get-job-run \
-                --job-name $JOB_NAME \
+                --job-name "$JOB_NAME" \
                 --run-id "$JOB_RUN_ID" \
                 --query 'JobRun.JobRunState' \
                 --region ${{ secrets.AWS_REGION }} \
