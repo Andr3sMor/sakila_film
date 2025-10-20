@@ -16,7 +16,7 @@ def spark():
 
 
 def test_fact_rental_transformation(spark):
-    # --- 1. Datos simulados de entrada ---
+    # --- 1. Datos de entrada simulados ---
     input_data = [
         Row(rental_id=1, rental_date="2025-10-18", inventory_id=101, customer_id=5,
             staff_id=2, last_update="2025-10-18", amount=10.5, payment_date="2025-10-18"),
