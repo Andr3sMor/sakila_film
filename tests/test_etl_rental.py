@@ -56,5 +56,4 @@ def test_fact_rental_transformation(spark):
     # --- 4. Verificar cantidad de registros ---
     assert df_fact_rental.count() == 2, "No se conservaron todos los registros"
     
-    #fin
 
