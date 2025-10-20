@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      # Se activa solo cuando el codigo ETL o de prueba cambian
       - glue_scripts/etl_rental.py
       - tests/test_etl_rental.py
       - requirements.txt
@@ -129,7 +128,7 @@ jobs:
       # -----------------------------------------------
       - name: Run Glue Job for Two Processing Dates (Sequential Wait)
         run: |
-          echo Ejecutando Glue Job para dos dias de prueba secuencialmente...
+          echo Ejecutando Glue Job para dos días de prueba secuencialmente...
           
           TODAY=$(date +%Y-%m-%d)
           YESTERDAY=$(date -d yesterday +%Y-%m-%d)
@@ -148,13 +147,13 @@ jobs:
             echo JobRunId: $JOB_RUN_ID
 
             # INICIO DE ESPERA PARA EVITAR ConcurrentRunsExceededException
-            echo Esperando a que finalice la ejecucion para $DATE...
+            echo Esperando a que finalice la ejecución para $DATE...
             WAITED=0
             STATE="STARTING"
             
             while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
               if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
-                echo Error: Tiempo maximo de espera alcanzado ($MAX_WAIT_MINUTES min).
+                echo Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min).
                 aws glue stop-job-run --job-name ${{ env.GLUE_JOB_NAME }} --run-id "$JOB_RUN_ID" --region ${{ env.AWS_REGION }} || true
                 exit 1
               fi
@@ -170,7 +169,7 @@ jobs:
             done
             
             if [ "$STATE" != "SUCCEEDED" ]; then
-              echo Error: El job fallo para la fecha $DATE con estado $STATE
+              echo Error: El job falló para la fecha $DATE con estado $STATE
               exit 1
             fi
 
