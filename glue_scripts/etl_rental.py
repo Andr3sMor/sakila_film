@@ -70,7 +70,6 @@ def main():
         col("film_id").alias("film_id"),
         col("staff_id").alias("store_id")
     ).withColumn(
-        # Columna de particionamiento
         "partition_date", 
         lit(PROCESSING_DATE)
     )

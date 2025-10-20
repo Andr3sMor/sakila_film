@@ -43,7 +43,7 @@ jobs:
   deploy-glue:
     name: Deploy AWS Glue Script and Update Job
     runs-on: ubuntu-latest
-    needs: test
+    needs: test # Solo se ejecuta si los tests pasan
     
     steps:
       - uses: actions/checkout@v4
@@ -56,15 +56,25 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} 
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Subir el script versionado a S3
+      # Subir el script a S3
       - name: Upload Glue Script to S3
         id: upload
         run: |
-          VERSION=$(date +%Y%m%d%H%M%S) 
-          S3_LOCATION=s3://${{ secrets.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$(basename ${{ secrets.SCRIPT_LOCAL_PATH }})
+          VERSION=$(date +%Y%m%d%H%M%S)
           
+          # Verificar que la ruta del script esté correcta
+          SCRIPT_LOCAL_PATH="glue_scripts/etl_rental.py"
+          if [ ! -f "$SCRIPT_LOCAL_PATH" ]; then
+            echo "Error: El script no existe en la ruta $SCRIPT_LOCAL_PATH."
+            exit 1
+          fi
+
+          # Usar basename solo si el script existe
+          SCRIPT_NAME=$(basename $SCRIPT_LOCAL_PATH)
+          S3_LOCATION=s3://${{ secrets.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$SCRIPT_NAME
+
           echo "Subiendo script a $S3_LOCATION"
-          aws s3 cp ${{ secrets.SCRIPT_LOCAL_PATH }} $S3_LOCATION
+          aws s3 cp $SCRIPT_LOCAL_PATH $S3_LOCATION
           
           echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
 
