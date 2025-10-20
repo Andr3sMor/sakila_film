@@ -43,17 +43,8 @@ jobs:
   deploy-glue:
     name: Deploy AWS Glue Script and Update Job
     runs-on: ubuntu-latest
-    needs: test
+    needs: test # Solo se ejecuta si los tests pasan
     
-    env:
-      S3_BUCKET_SCRIPTS: ${{ secrets.S3_BUCKET_SCRIPTS }}  # Bucket de scripts en S3 (ej. scripts-glue2)
-      GLUE_JOB_NAME: sakila-etl-fact-rental
-      SCRIPT_LOCAL_PATH: glue_scripts/etl_rental.py
-      CONNECTION_NAME: ${{ secrets.CONNECTION_NAME }}  # Nombre de la conexión JDBC
-      GLUE_VERSION: 2.0  # Cambiado a 2.0 para usar Python 3.x
-      IAM_ROLE_ARN: ${{ secrets.AWS_GLUE_ROLE_ARN }}  # IAM Role ARN como secreto
-      AWS_REGION: ${{ secrets.AWS_REGION }}  # Región de AWS
-
     steps:
       - uses: actions/checkout@v4
 
@@ -63,32 +54,28 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }} 
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # -----------------------------------------------
-      # 2a. Subir el script versionado a S3
-      # -----------------------------------------------
+      # Subir el script versionado a S3
       - name: Upload Glue Script to S3
         id: upload
         run: |
           VERSION=$(date +%Y%m%d%H%M%S) 
-          S3_LOCATION=s3://${{ env.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$(basename ${{ env.SCRIPT_LOCAL_PATH }})
+          S3_LOCATION=s3://${{ secrets.S3_BUCKET_SCRIPTS }}/fact_rental/$VERSION/$(basename ${{ secrets.SCRIPT_LOCAL_PATH }})
           
           echo "Subiendo script a $S3_LOCATION"
-          aws s3 cp ${{ env.SCRIPT_LOCAL_PATH }} $S3_LOCATION
+          aws s3 cp ${{ secrets.SCRIPT_LOCAL_PATH }} $S3_LOCATION
           
           echo "GLUE_SCRIPT_PATH=$S3_LOCATION" >> $GITHUB_ENV
 
-      # -----------------------------------------------
-      # 2b. Crear o Actualizar la Definición del Glue Job
-      # -----------------------------------------------
+      # Crear o Actualizar la Definición del Glue Job
       - name: Create or Update AWS Glue Job Definition
         run: |
-          JOB_NAME=${{ env.GLUE_JOB_NAME }}
+          JOB_NAME=sakila-etl-fact-rental
           SCRIPT_PATH=${{ env.GLUE_SCRIPT_PATH }}
 
           set +e 
-          aws glue get-job --job-name $JOB_NAME --region ${{ env.AWS_REGION }}
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
           EXIT_CODE=$?
           set -e 
 
@@ -97,8 +84,8 @@ jobs:
             echo "Job $JOB_NAME encontrado. Procediendo a ACTUALIZAR..."
             aws glue update-job \
               --job-name $JOB_NAME \
-              --region ${{ env.AWS_REGION }} \
-              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},GlueVersion=2.0,Connections=${{ env.CONNECTION_NAME }},MaxCapacity=2,WorkerType=G.1X,NumberOfWorkers=2"
+              --region ${{ secrets.AWS_REGION }} \
+              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},Connections={\"ConnectionName\": \"${{ secrets.JDBC_CONNECTION_NAME }}\"}"
             
           elif [ $EXIT_CODE -eq 254 ]; then
             # Job NO existe: CREAR
@@ -106,21 +93,19 @@ jobs:
             aws glue create-job \
               --name $JOB_NAME \
               --role ${{ secrets.AWS_GLUE_ROLE_ARN }} \
-              --region ${{ env.AWS_REGION }} \
+              --region ${{ secrets.AWS_REGION }} \
               --command Name=glueetl,ScriptLocation=$SCRIPT_PATH \
-              --glue-version 2.0 \
+              --glue-version 4.0 \
               --number-of-workers 2 \
               --worker-type G.1X \
-              --connections ${{ env.CONNECTION_NAME }} \
+              --connections "${{ secrets.JDBC_CONNECTION_NAME }}" \
               --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           else
             echo "Error desconocido al intentar obtener o crear el Job. Codigo: $EXIT_CODE"
             exit 1
           fi
 
-      # -----------------------------------------------
-      # 2c. Ejecutar el Glue Job para los dos días (Prueba de Incrementalidad y Concurrencia)
-      # -----------------------------------------------
+      # Ejecutar el Glue Job para los dos días (Prueba de Incrementalidad y Concurrencia)
       - name: Run Glue Job for Two Processing Dates (Sequential Wait)
         run: |
           echo "Ejecutando Glue Job para dos días de prueba secuencialmente..."
@@ -134,8 +119,8 @@ jobs:
           for DATE in "$YESTERDAY" "$TODAY"; do
             echo "Lanzando Glue Job para fecha $DATE"
             JOB_RUN_ID=$(aws glue start-job-run \
-              --job-name ${{ env.GLUE_JOB_NAME }} \
-              --region ${{ env.AWS_REGION }} \
+              --job-name $JOB_NAME \
+              --region ${{ secrets.AWS_REGION }} \
               --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}' \
               --query JobRunId \
               --output text)
@@ -150,16 +135,16 @@ jobs:
             while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
               if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
                 echo "Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min)."
-                aws glue stop-job-run --job-name ${{ env.GLUE_JOB_NAME }} --run-id "$JOB_RUN_ID" --region ${{ env.AWS_REGION }} || true
+                aws glue stop-job-run --job-name $JOB_NAME --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
                 exit 1
               fi
               sleep 60
               WAITED=$((WAITED+1))
               STATE=$(aws glue get-job-run \
-                --job-name ${{ env.GLUE_JOB_NAME }} \
+                --job-name $JOB_NAME \
                 --run-id "$JOB_RUN_ID" \
                 --query 'JobRun.JobRunState' \
-                --region ${{ env.AWS_REGION }} \
+                --region ${{ secrets.AWS_REGION }} \
                 --output text)
               echo "Estado actual ($DATE): $STATE (min: $WAITED)"
             done
