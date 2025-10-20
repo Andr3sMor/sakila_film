@@ -14,7 +14,7 @@ spark = None
 def main():
     global sc, glueContext, spark
     
-    # 1. Inicialización y Recepción de Argumentos
+    # 1. Recepción de Argumentos
     args = getResolvedOptions(sys.argv, ['JOB_NAME', 'PROCESSING_DATE']) 
     sc = SparkContext.getOrCreate()
     glueContext = GlueContext(sc)

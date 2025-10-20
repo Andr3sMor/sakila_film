@@ -84,6 +84,12 @@ jobs:
           JOB_NAME=sakila-etl-fact-rental
           SCRIPT_PATH=${{ env.GLUE_SCRIPT_PATH }}
 
+          # Validar que JDBC_CONNECTION_NAME no esté vacío
+          if [ -z "${{ secrets.JDBC_CONNECTION_NAME }}" ]; then
+            echo "Error: JDBC_CONNECTION_NAME no está definido."
+            exit 1
+          fi
+
           set +e 
           aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
           EXIT_CODE=$?
@@ -95,7 +101,7 @@ jobs:
             aws glue update-job \
               --job-name $JOB_NAME \
               --region ${{ secrets.AWS_REGION }} \
-              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},Connections={\"ConnectionName\": \"Jdbc connection\"}"
+              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},Connections={\"ConnectionName\": \"Jdbc connection\"},GlueVersion=3.0"
             
           elif [ $EXIT_CODE -eq 254 ]; then
             # Job NO existe: CREAR
@@ -105,7 +111,7 @@ jobs:
               --role ${{ secrets.AWS_GLUE_ROLE_ARN }} \
               --region ${{ secrets.AWS_REGION }} \
               --command Name=glueetl,ScriptLocation=$SCRIPT_PATH \
-              --glue-version 4.0 \
+              --glue-version 3.0 \
               --number-of-workers 2 \
               --worker-type G.1X \
               --connections "Jdbc connection" \

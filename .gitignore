@@ -2,7 +2,14 @@
 __pycache__/
 *.py[codz]
 *$py.class
-/env/
+
+# Entorno Virtual (por ejemplo, /env/)
+env/
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # C extensions
 *.so
