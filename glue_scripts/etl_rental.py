@@ -75,7 +75,7 @@ def main():
         lit(PROCESSING_DATE)
     )
 
-    # 5. Escritura en S3 en formato Parquet
+    # 5. Escritura en S3 de archivos en formato Parquet
     print(f"-> Escribiendo datos en S3 y particionando por {PROCESSING_DATE}")
     
     df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)

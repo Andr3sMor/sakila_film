@@ -43,7 +43,7 @@ jobs:
   deploy-glue:
     name: Deploy AWS Glue Script and Update Job
     runs-on: ubuntu-latest
-    needs: test # Solo se ejecuta si los tests pasan
+    needs: test
     
     steps:
       - uses: actions/checkout@v4
@@ -110,7 +110,6 @@ jobs:
         run: |
           echo "Ejecutando Glue Job para dos días de prueba secuencialmente..."
           
-          # Asignar las fechas correctamente
           TODAY=$(date +%Y-%m-%d)
           YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
 
