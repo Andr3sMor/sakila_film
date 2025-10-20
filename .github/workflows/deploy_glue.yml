@@ -43,7 +43,7 @@ jobs:
   deploy-glue:
     name: Deploy AWS Glue Script and Update Job
     runs-on: ubuntu-latest
-    needs: test # Solo se ejecuta si los tests pasan
+    needs: test
     
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
             aws glue update-job \
               --job-name $JOB_NAME \
               --region ${{ secrets.AWS_REGION }} \
-              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},Connections={\"ConnectionName\": \"${{ secrets.JDBC_CONNECTION_NAME }}\"}"
+              --job-update "Role=${{ secrets.AWS_GLUE_ROLE_ARN }},Command={Name=glueetl,ScriptLocation=$SCRIPT_PATH},Connections={\"ConnectionName\": \"Jdbc connection\"}"
             
           elif [ $EXIT_CODE -eq 254 ]; then
             # Job NO existe: CREAR
@@ -108,7 +108,7 @@ jobs:
               --glue-version 4.0 \
               --number-of-workers 2 \
               --worker-type G.1X \
-              --connections "${{ secrets.JDBC_CONNECTION_NAME }}" \
+              --connections "Jdbc connection" \
               --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           else
             echo "Error desconocido al intentar obtener o crear el Job. Codigo: $EXIT_CODE"

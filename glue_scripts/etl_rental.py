@@ -29,7 +29,7 @@ def main():
     DB_TABLE = "rental"
 
     # 2. Definir el Predicado de Filtrado (Lectura Incremental)
-    # Filtra la RDS para cargar solo los datos de la fecha específica
+    # Filtra la base de datos RDS para cargar solo los datos de la fecha específica
     predicate = f"DATE(r.rental_date) = '{PROCESSING_DATE}'"
 
     print(f"-> Leyendo la tabla {DB_TABLE} con filtro: {predicate}")
