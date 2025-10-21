@@ -18,8 +18,8 @@ def main():
     CONNECTION_NAME = "Jdbc connection"
     DB_TABLE = "customer"
 
-    # Lectura desde RDS usando Job Bookmark de forma correcta
     try:
+        # 1. Lectura desde RDS
         datasource = glueContext.create_dynamic_frame.from_options(
             connection_type="jdbc",
             connection_options={
@@ -27,16 +27,17 @@ def main():
                 "connectionName": CONNECTION_NAME,
                 "dbtable": DB_TABLE
             },
-            # ----> CORRECCIÓN: Contexto para que el Job Bookmark funcione <----
             transformation_ctx="datasource_customer"
         )
-        df_customer = datasource.toDF()
 
-        # Verificar si hay datos nuevos para procesar
-        if df_customer.count() == 0:
+        # 2. ----> CORRECCIÓN: Verificar si el DynamicFrame está vacío ANTES de convertirlo <----
+        if datasource.count() == 0:
             print("-> No se encontraron registros nuevos para procesar. Job finalizado.")
             job.commit()
             return
+
+        # 3. Si no está vacío, continuar con el proceso normal
+        df_customer = datasource.toDF()
 
         # Transformaciones
         df_dim_customer = df_customer.withColumn("partition_date", lit("static"))

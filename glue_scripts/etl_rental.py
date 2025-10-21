@@ -17,8 +17,8 @@ def main():
     S3_TARGET_PATH = "s3://cmjm-datalake/facts/fact_rental/"
     CONNECTION_NAME = "Jdbc connection"
 
-    # Lectura desde RDS usando Job Bookmark
     try:
+        # 1. Lectura desde RDS
         datasource = glueContext.create_dynamic_frame.from_options(
             connection_type="jdbc",
             connection_options={
@@ -34,19 +34,20 @@ def main():
                     JOIN staff st ON r.staff_id = st.staff_id
                     JOIN store s ON st.store_id = s.store_id) AS rental_data
                 """,
-                 # Opcional pero recomendado para consultas: especifica la columna incremental
                 "job-bookmark-keys": ["rental_id"],
                 "job-bookmark-keys-sort-order": "asc"
             },
-            # ----> CORRECCIÓN: Contexto para que el Job Bookmark funcione <----
             transformation_ctx="datasource_rental"
         )
-        df_rental = datasource.toDF()
 
-        if df_rental.count() == 0:
+        # 2. ----> CORRECCIÓN: Verificar si el DynamicFrame está vacío ANTES de convertirlo <----
+        if datasource.count() == 0:
             print("-> No se encontraron registros nuevos para procesar. Job finalizado.")
             job.commit()
             return
+            
+        # 3. Si no está vacío, continuar
+        df_rental = datasource.toDF()
             
         # Transformaciones
         df_fact_rental = df_rental.withColumn(
@@ -60,6 +61,7 @@ def main():
         # Escritura en S3
         print(f"-> Escribiendo {df_fact_rental.count()} registros en S3: {S3_TARGET_PATH}")
         df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+
     except Exception as e:
         print(f"-> Error durante la ejecución del job: {e}")
         raise e
