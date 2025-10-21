@@ -2,8 +2,8 @@ import sys
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
-from pyspark.sql.functions import col, lit
 from awsglue.job import Job
+from pyspark.sql.functions import lit
 
 def main():
     args = getResolvedOptions(sys.argv, ['JOB_NAME'])
@@ -13,13 +13,13 @@ def main():
     job = Job(glueContext)
     job.init(args['JOB_NAME'], args)
 
-    # Parámetros
-    S3_TARGET_PATH = "s3://cmjm-datalake/dimensions/dim_store/"
     CONNECTION_NAME = "Jdbc connection"
+    S3_TARGET_PATH = "s3://cmjm-datalake/dimensions/dim_store/"
     DB_TABLE = "store"
 
     try:
-        # 1. Lectura desde RDS
+        print(f"==> Leyendo tabla {DB_TABLE} desde RDS...")
+
         datasource = glueContext.create_dynamic_frame.from_options(
             connection_type="jdbc",
             connection_options={
@@ -29,22 +29,17 @@ def main():
             },
             transformation_ctx="datasource_store"
         )
-        
-        # 2. ----> CORRECCIÓN: Verificar si el DynamicFrame está vacío ANTES de convertirlo <----
-        if datasource.count() == 0:
-            print("-> No se encontraron registros nuevos para procesar. Job finalizado.")
+
+        count = datasource.count()
+        if count == 0:
+            print("-> No se encontraron registros nuevos. Job finalizado.")
             job.commit()
             return
-            
-        # 3. Si no está vacío, continuar
-        df_store = datasource.toDF()
-            
-        # Transformaciones
-        df_dim_store = df_store.withColumn("partition_date", lit("static"))
 
-        # Escritura en S3
-        print(f"-> Escribiendo {df_dim_store.count()} registros en S3: {S3_TARGET_PATH}")
-        df_dim_store.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+        df = datasource.toDF().withColumn("partition_date", lit("static"))
+
+        print(f"-> Escribiendo {df.count()} registros en {S3_TARGET_PATH}")
+        df.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
 
     except Exception as e:
         print(f"-> Error durante la ejecución del job: {e}")
