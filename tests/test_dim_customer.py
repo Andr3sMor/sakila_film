@@ -23,7 +23,7 @@ def test_dim_customer_transformation(spark):
     # Simular transformación
     df_dim_customer = df_customer.withColumn("partition_date", lit(PROCESSING_DATE))
 
-    # Validaciones
+    # Validaciones de usuario
     assert df_dim_customer.columns == ["customer_id", "name", "last_update", "email", "partition_date"]
     assert df_dim_customer.count() == 2
     assert df_dim_customer.first().partition_date == PROCESSING_DATE

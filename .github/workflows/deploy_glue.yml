@@ -62,77 +62,97 @@ jobs:
         id: upload
         run: |
           VERSION=$(date +%Y%m%d%H%M%S)
-          SCRIPTS=("dim_customer.py" "dim_film.py" "dim_store.py" "dim_date.py" "etl_rental.py")
           S3_BUCKET=${{ secrets.S3_BUCKET_SCRIPTS }}
 
-          for SCRIPT in "${SCRIPTS[@]}"; do
-            SCRIPT_LOCAL_PATH="glue_scripts/$SCRIPT"
-            if [ ! -f "$SCRIPT_LOCAL_PATH" ]; then
-              echo "Error: El script $SCRIPT no existe en la ruta $SCRIPT_LOCAL_PATH."
-              exit 1
-            fi
-            S3_LOCATION=s3://$S3_BUCKET/$SCRIPT/$VERSION/$SCRIPT
-            echo "Subiendo script $SCRIPT a $S3_LOCATION"
-            aws s3 cp $SCRIPT_LOCAL_PATH $S3_LOCATION
-            echo "GLUE_SCRIPT_PATH_${SCRIPT//./_}=$S3_LOCATION" >> $GITHUB_ENV
-          done
+          # Subir dim_customer.py
+          aws s3 cp glue_scripts/dim_customer.py s3://$S3_BUCKET/dim_customer/$VERSION/dim_customer.py
+          echo "DIM_CUSTOMER_SCRIPT=s3://$S3_BUCKET/dim_customer/$VERSION/dim_customer.py" >> $GITHUB_ENV
+
+          # Subir dim_film.py
+          aws s3 cp glue_scripts/dim_film.py s3://$S3_BUCKET/dim_film/$VERSION/dim_film.py
+          echo "DIM_FILM_SCRIPT=s3://$S3_BUCKET/dim_film/$VERSION/dim_film.py" >> $GITHUB_ENV
+
+          # Subir dim_store.py
+          aws s3 cp glue_scripts/dim_store.py s3://$S3_BUCKET/dim_store/$VERSION/dim_store.py
+          echo "DIM_STORE_SCRIPT=s3://$S3_BUCKET/dim_store/$VERSION/dim_store.py" >> $GITHUB_ENV
+
+          # Subir dim_date.py
+          aws s3 cp glue_scripts/dim_date.py s3://$S3_BUCKET/dim_date/$VERSION/dim_date.py
+          echo "DIM_DATE_SCRIPT=s3://$S3_BUCKET/dim_date/$VERSION/dim_date.py" >> $GITHUB_ENV
+
+          # Subir etl_rental.py
+          aws s3 cp glue_scripts/etl_rental.py s3://$S3_BUCKET/etl_rental/$VERSION/etl_rental.py
+          echo "ETL_RENTAL_SCRIPT=s3://$S3_BUCKET/etl_rental/$VERSION/etl_rental.py" >> $GITHUB_ENV
 
       # --------------------------------------------------
       # Crear o Actualizar la Definición de los Glue Jobs
       # --------------------------------------------------
       - name: Create or Update AWS Glue Job Definitions
         run: |
-          JOBS=("sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-dim-date" "sakila-etl-fact-rental")
-          SCRIPTS=("dim_customer.py" "dim_film.py" "dim_store.py" "dim_date.py" "etl_rental.py")
+          # Job para dim_customer
+          JOB_NAME="sakila-etl-dim-customer"
+          SCRIPT_PATH=${{ env.DIM_CUSTOMER_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+          fi
 
-          for i in "${!JOBS[@]}"; do
-            JOB_NAME=${JOBS[$i]}
-            SCRIPT=${SCRIPTS[$i]}
-            SCRIPT_PATH=${{ env["GLUE_SCRIPT_PATH_"${SCRIPT//./_}]}}
+          # Job para dim_film
+          JOB_NAME="sakila-etl-dim-film"
+          SCRIPT_PATH=${{ env.DIM_FILM_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+          fi
 
-            echo "Configurando job $JOB_NAME con script $SCRIPT_PATH"
+          # Job para dim_store
+          JOB_NAME="sakila-etl-dim-store"
+          SCRIPT_PATH=${{ env.DIM_STORE_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+          fi
 
-            set +e
-            aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
-            EXIT_CODE=$?
-            set -e
+          # Job para dim_date
+          JOB_NAME="sakila-etl-dim-date"
+          SCRIPT_PATH=${{ env.DIM_DATE_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+          fi
 
-            if [ $EXIT_CODE -eq 0 ]; then
-              # Job EXISTE → ACTUALIZAR
-              echo "Job $JOB_NAME encontrado. Procediendo a ACTUALIZAR..."
-              aws glue update-job \
-                --job-name $JOB_NAME \
-                --region ${{ secrets.AWS_REGION }} \
-                --job-update "{
-                  \"Role\": \"${{ secrets.AWS_GLUE_ROLE_ARN }}\",
-                  \"Command\": {
-                    \"Name\": \"glueetl\",
-                    \"ScriptLocation\": \"$SCRIPT_PATH\",
-                    \"PythonVersion\": \"3\"
-                  },
-                  \"Connections\": {
-                    \"Connections\": [\"${{ secrets.JDBC_CONNECTION_NAME }}\"]
-                  },
-                  \"GlueVersion\": \"3.0\"
-                }"
-            elif [ $EXIT_CODE -eq 254 ]; then
-              # Job NO EXISTE → CREAR
-              echo "Job $JOB_NAME no encontrado. Procediendo a CREAR..."
-              aws glue create-job \
-                --name $JOB_NAME \
-                --role ${{ secrets.AWS_GLUE_ROLE_ARN }} \
-                --region ${{ secrets.AWS_REGION }} \
-                --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 \
-                --glue-version 3.0 \
-                --number-of-workers 2 \
-                --worker-type G.1X \
-                --connections "{\"Connections\": [\"${{ secrets.JDBC_CONNECTION_NAME }}\"]}" \
-                --default-arguments '{\"--PROCESSING_DATE\": \"2000-01-01\", \"--job-bookmark-option\": \"job-bookmark-disable\"}'
-            else
-              echo "Error desconocido al intentar obtener o crear el Job. Código: $EXIT_CODE"
-              exit 1
-            fi
-          done
+          # Job para etl_rental
+          JOB_NAME="sakila-etl-fact-rental"
+          SCRIPT_PATH=${{ env.ETL_RENTAL_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+          fi
 
       # --------------------------------------------------
       # 3. Ejecutar los Glue Jobs para dos días (Prueba Incremental)
