@@ -25,7 +25,7 @@ def main():
             "useConnectionProperties": "true",
             "connectionName": CONNECTION_NAME,
             "dbtable": DB_TABLE,
-            "pushDownPredicate": "$(pushdown_predicate)"  # Job Bookmark maneja esto automáticamente
+            "pushDownPredicate": "$(pushdown_predicate)"
         }
     )
     df_customer = datasource.toDF()

@@ -110,7 +110,9 @@ jobs:
               "GlueVersion": "3.0",
               "DefaultArguments": {
                 "--job-bookmark-option": "job-bookmark-enable"
-              }
+              },
+              "NumberOfWorkers": 2,
+              "WorkerType": "G.1X"
             }'
           else
             aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
@@ -137,7 +139,9 @@ jobs:
               "GlueVersion": "3.0",
               "DefaultArguments": {
                 "--job-bookmark-option": "job-bookmark-enable"
-              }
+              },
+              "NumberOfWorkers": 2,
+              "WorkerType": "G.1X"
             }'
           else
             aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
@@ -164,7 +168,9 @@ jobs:
               "GlueVersion": "3.0",
               "DefaultArguments": {
                 "--job-bookmark-option": "job-bookmark-enable"
-              }
+              },
+              "NumberOfWorkers": 2,
+              "WorkerType": "G.1X"
             }'
           else
             aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
@@ -188,7 +194,9 @@ jobs:
               "Connections": {
                 "Connections": ["Jdbc connection"]
               },
-              "GlueVersion": "3.0"
+              "GlueVersion": "3.0",
+              "NumberOfWorkers": 2,
+              "WorkerType": "G.1X"
             }'
           else
             aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}'
@@ -215,7 +223,9 @@ jobs:
               "GlueVersion": "3.0",
               "DefaultArguments": {
                 "--job-bookmark-option": "job-bookmark-enable"
-              }
+              },
+              "NumberOfWorkers": 2,
+              "WorkerType": "G.1X"
             }'
           else
             aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
