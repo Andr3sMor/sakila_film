@@ -4,10 +4,9 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from pyspark.sql.functions import (
     col, lit, to_date, date_format,
-    year, month, dayofmonth, dayofweek,
-    quarter, date_add, sequence, explode
+    year, month, dayofmonth, dayofweek, quarter, date_add
 )
-from pyspark.sql.types import IntegerType, StringType, DateType
+from pyspark.sql.types import IntegerType
 from awsglue.job import Job
 
 def main():
@@ -20,24 +19,22 @@ def main():
 
     # Parámetros
     S3_TARGET_PATH = "s3://cmjm-datalake/dimensions/dim_date/"
-    START_DATE = "2015-01-01"  # Ajusta según tus necesidades
-    END_DATE = "2030-12-31"    # Ajusta según tus necesidades
+    START_DATE = "2015-01-01"
+    END_DATE = "2030-12-31"
 
     # Generar rango de fechas
     df_dates = spark.range(
         (date_add(to_date(lit(END_DATE)), 1) - to_date(lit(START_DATE))).cast("int")
+    ).withColumn(
+        "id_int", col("id").cast(IntegerType())
     ).select(
-        date_add(to_date(lit(START_DATE)), col("id")).alias("date_id_raw")
+        date_add(to_date(lit(START_DATE)), col("id_int")).alias("date")
     ).withColumn(
-        "date_id", date_format(col("date_id_raw"), "yyyyMMdd").cast(IntegerType())
-    ).withColumn(
-        "date", col("date_id_raw").cast(DateType())
+        "date_id", date_format(col("date"), "yyyyMMdd").cast(IntegerType())
     ).withColumn(
         "day", dayofmonth(col("date"))
     ).withColumn(
         "month", month(col("date"))
-    ).withColumn(
-        "month_name", date_format(col("date"), "MMMM")
     ).withColumn(
         "year", year(col("date"))
     ).withColumn(
@@ -47,17 +44,14 @@ def main():
     ).withColumn(
         "quarter", quarter(col("date"))
     ).withColumn(
-        "is_weekend", (col("day_of_week") == 1).cast(IntegerType()) | (col("day_of_week") == 7).cast(IntegerType())
+        "is_weekend", (col("day_of_week") == 1) | (col("day_of_week") == 7)
     ).withColumn(
-        "is_holiday", lit(0)  # Puedes personalizar esto para festivos específicos
-    ).drop("date_id_raw")
-
-    # Añadir partición (opcional, ya que es una tabla estática)
-    df_dim_date = df_dates.withColumn("partition_date", lit("static"))
+        "partition_date", lit("static")
+    )
 
     # Escribir en S3
     print(f"-> Escribiendo Dim_Date en S3: {S3_TARGET_PATH}")
-    df_dim_date.write.mode("overwrite").format("parquet").save(S3_TARGET_PATH)
+    df_dates.write.mode("overwrite").format("parquet").save(S3_TARGET_PATH)
 
     job.commit()
     spark.stop()

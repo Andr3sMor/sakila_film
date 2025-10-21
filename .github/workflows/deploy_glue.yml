@@ -107,10 +107,13 @@ jobs:
               "Connections": {
                 "Connections": ["Jdbc connection"]
               },
-              "GlueVersion": "3.0"
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
           fi
 
           # Job para dim_film
@@ -131,10 +134,13 @@ jobs:
               "Connections": {
                 "Connections": ["Jdbc connection"]
               },
-              "GlueVersion": "3.0"
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
           fi
 
           # Job para dim_store
@@ -155,10 +161,13 @@ jobs:
               "Connections": {
                 "Connections": ["Jdbc connection"]
               },
-              "GlueVersion": "3.0"
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
           fi
 
           # Job para dim_date
@@ -182,7 +191,7 @@ jobs:
               "GlueVersion": "3.0"
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}'
           fi
 
           # Job para etl_rental
@@ -203,61 +212,59 @@ jobs:
               "Connections": {
                 "Connections": ["Jdbc connection"]
               },
-              "GlueVersion": "3.0"
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
           fi
 
       # --------------------------------------------------
-      # 3. Ejecutar los Glue Jobs para dos días (Prueba Incremental)
+      # 3. Ejecutar los Glue Jobs
       # --------------------------------------------------
-      - name: Run Glue Jobs for Two Processing Dates (Sequential Wait)
+      - name: Run Glue Jobs
         run: |
-          echo "Ejecutando Glue Jobs para dos días de prueba secuencialmente..."
+          echo "Ejecutando Glue Jobs..."
           JOBS=("sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-dim-date" "sakila-etl-fact-rental")
-          TODAY=$(date +%Y-%m-%d)
-          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
           MAX_WAIT_MINUTES=15
 
           for JOB_NAME in "${JOBS[@]}"; do
-            for DATE in "$YESTERDAY" "$TODAY"; do
-              echo "Lanzando Glue Job $JOB_NAME para fecha $DATE"
-              JOB_RUN_ID=$(aws glue start-job-run \
-                --job-name "$JOB_NAME" \
-                --region ${{ secrets.AWS_REGION }} \
-                --arguments '{"--PROCESSING_DATE": "'"$DATE"'"}' \
-                --query JobRunId \
-                --output text)
-              echo "JobRunId: $JOB_RUN_ID"
-              echo "Esperando a que finalice la ejecución para $JOB_NAME en $DATE..."
-              WAITED=0
-              STATE="STARTING"
+            echo "Lanzando Glue Job $JOB_NAME"
+            JOB_RUN_ID=$(aws glue start-job-run \
+              --job-name "$JOB_NAME" \
+              --region ${{ secrets.AWS_REGION }} \
+              --query JobRunId \
+              --output text)
+            echo "JobRunId: $JOB_RUN_ID"
+            echo "Esperando a que finalice la ejecución para $JOB_NAME..."
+            WAITED=0
+            STATE="STARTING"
 
-              while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
-                if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
-                  echo "Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min)."
-                  aws glue stop-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
-                  exit 1
-                fi
-                sleep 60
-                WAITED=$((WAITED+1))
-                STATE=$(aws glue get-job-run \
-                  --job-name "$JOB_NAME" \
-                  --run-id "$JOB_RUN_ID" \
-                  --query 'JobRun.JobRunState' \
-                  --region ${{ secrets.AWS_REGION }} \
-                  --output text)
-                echo "Estado actual ($JOB_NAME, $DATE): $STATE (min: $WAITED)"
-              done
-
-              if [ "$STATE" != "SUCCEEDED" ]; then
-                echo "Error: El job $JOB_NAME falló para la fecha $DATE con estado $STATE"
+            while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
+              if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
+                echo "Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min)."
+                aws glue stop-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
                 exit 1
               fi
-              echo "Job $JOB_NAME completado exitosamente para la fecha $DATE"
+              sleep 60
+              WAITED=$((WAITED+1))
+              STATE=$(aws glue get-job-run \
+                --job-name "$JOB_NAME" \
+                --run-id "$JOB_RUN_ID" \
+                --query 'JobRun.JobRunState' \
+                --region ${{ secrets.AWS_REGION }} \
+                --output text)
+              echo "Estado actual ($JOB_NAME): $STATE (min: $WAITED)"
             done
+
+            if [ "$STATE" != "SUCCEEDED" ]; then
+              echo "Error: El job $JOB_NAME falló con estado $STATE"
+              exit 1
+            fi
+            echo "Job $JOB_NAME completado exitosamente"
           done
 
       - name: Deployment Completed
-        run: echo "Despliegue continuo de Glue Jobs y prueba incremental completados."
+        run: echo "Despliegue continuo de Glue Jobs completado."
