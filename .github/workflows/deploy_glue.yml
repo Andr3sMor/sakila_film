@@ -34,13 +34,14 @@ jobs:
           aws s3 cp src/etl_dim_store.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_store.py
           aws s3 cp src/etl_dim_date.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_date.py
           aws s3 cp src/etl_rental.py s3://${SCRIPT_BUCKET}/scripts/etl_rental.py
+          aws s3 cp src/etl_fact_rental_sql.py s3://${SCRIPT_BUCKET}/scripts/etl_fact_rental_sql.py
 
       - name: Create or update Glue Jobs
         run: |
           echo "Creating or updating AWS Glue Jobs..."
 
-          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental")
-          SCRIPTS=("etl_dim_date.py" "etl_dim_customer.py" "etl_dim_film.py" "etl_dim_store.py" "etl_rental.py")
+          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental" "sakila-etl-fact-rental-sql")
+          SCRIPTS=("etl_dim_date.py" "etl_dim_customer.py" "etl_dim_film.py" "etl_dim_store.py" "etl_rental.py" "etl_fact_rental_sql.py")
 
           for i in "${!JOBS[@]}"; do
             JOB_NAME=${JOBS[$i]}
