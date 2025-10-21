@@ -117,7 +117,6 @@ def main():
     except Exception as e:
         print(f"❌ Error durante ejecución del job: {e}")
         raise
-    #push
     finally:
         job.commit()
 
