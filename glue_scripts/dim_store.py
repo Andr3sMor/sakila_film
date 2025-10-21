@@ -19,26 +19,35 @@ def main():
     DB_TABLE = "store"
 
     # Lectura desde RDS usando Job Bookmark
-    datasource = glueContext.create_dynamic_frame.from_options(
-        connection_type="jdbc",
-        connection_options={
-            "useConnectionProperties": "true",
-            "connectionName": CONNECTION_NAME,
-            "dbtable": DB_TABLE,
-            "pushDownPredicate": "$(pushdown_predicate)"
-        }
-    )
-    df_store = datasource.toDF()
+    try:
+        datasource = glueContext.create_dynamic_frame.from_options(
+            connection_type="jdbc",
+            connection_options={
+                "useConnectionProperties": "true",
+                "connectionName": CONNECTION_NAME,
+                "dbtable": DB_TABLE
+            },
+            # ----> CORRECCIÓN: Contexto para que el Job Bookmark funcione <----
+            transformation_ctx="datasource_store"
+        )
+        df_store = datasource.toDF()
+        
+        if df_store.count() == 0:
+            print("-> No se encontraron registros nuevos para procesar. Job finalizado.")
+            job.commit()
+            return
+            
+        # Transformaciones
+        df_dim_store = df_store.withColumn("partition_date", lit("static"))
 
-    # Transformaciones
-    df_dim_store = df_store.withColumn("partition_date", lit("static"))
-
-    # Escritura en S3
-    print(f"-> Escribiendo datos en S3: {S3_TARGET_PATH}")
-    df_dim_store.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+        # Escritura en S3
+        print(f"-> Escribiendo {df_dim_store.count()} registros en S3: {S3_TARGET_PATH}")
+        df_dim_store.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+    except Exception as e:
+        print(f"-> Error al leer datos de RDS: {e}")
+        raise e
 
     job.commit()
-    spark.stop()
 
 if __name__ == '__main__':
     main()
