@@ -96,7 +96,7 @@ jobs:
       - name: Run Glue Jobs Sequentially
         run: |
           echo "Running Glue Jobs in order..."
-          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental")
+          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental" "sakila-etl-fact-rental-sql")
 
           for JOB_NAME in "${JOBS[@]}"; do
             echo "Launching Glue Job: $JOB_NAME"
