@@ -97,9 +97,20 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 0 ]; then
-            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           fi
 
           # Job para dim_film
@@ -110,9 +121,20 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 0 ]; then
-            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           fi
 
           # Job para dim_store
@@ -123,9 +145,20 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 0 ]; then
-            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           fi
 
           # Job para dim_date
@@ -136,9 +169,20 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 0 ]; then
-            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           fi
 
           # Job para etl_rental
@@ -149,9 +193,20 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 0 ]; then
-            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{"Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}", "Command": {"Name": "glueetl", "ScriptLocation": "'"$SCRIPT_PATH"'", "PythonVersion": "3"}, "Connections": {"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}, "GlueVersion": "3.0"}'
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["${{ secrets.JDBC_CONNECTION_NAME }}"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--PROCESSING_DATE": "2000-01-01", "--job-bookmark-option": "job-bookmark-disable"}'
           fi
 
       # --------------------------------------------------

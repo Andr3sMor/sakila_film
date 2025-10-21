@@ -20,7 +20,7 @@ def test_dim_customer_transformation(spark):
     df_customer = spark.createDataFrame(input_data)
     PROCESSING_DATE = "2025-10-18"
 
-    # Simular transformación
+    # Simular transformación de datos
     df_dim_customer = df_customer.withColumn("partition_date", lit(PROCESSING_DATE))
 
     # Validaciones de usuario
