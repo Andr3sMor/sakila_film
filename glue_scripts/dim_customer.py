@@ -26,10 +26,9 @@ def main():
         connection_options={
             "useConnectionProperties": "true",
             "connectionName": CONNECTION_NAME,
-            "dbtable": DB_TABLE,
-            # Cuando el Job Bookmark está habilitado, Glue inyecta el predicado incremental
-            "pushDownPredicate": "$(pushdown_predicate)"
-        }
+            "dbtable": DB_TABLE
+        },
+        transformation_ctx="datasource_dim_customer"
     )
     df_customer = datasource.toDF()
 

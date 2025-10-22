@@ -29,7 +29,7 @@ def main():
                 "connectionName": CONNECTION_NAME,
                 "dbtable": DB_TABLE
             },
-            transformation_ctx="datasource_store"
+            transformation_ctx="datasource_dim_store"
         )
 
         count = datasource.count()

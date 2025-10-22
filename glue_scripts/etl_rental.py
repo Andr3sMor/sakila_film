@@ -34,9 +34,9 @@ def main():
                 JOIN inventory i ON r.inventory_id = i.inventory_id
                 JOIN staff st ON r.staff_id = st.staff_id
                 JOIN store s ON st.store_id = s.store_id) AS rental_data
-            """,
-            "pushDownPredicate": "$(pushdown_predicate)"
-        }
+            """
+        },
+        transformation_ctx="datasource_fact_rental"
     )
     df_rental = datasource.toDF()
 

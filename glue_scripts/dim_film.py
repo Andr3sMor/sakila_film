@@ -26,9 +26,9 @@ def main():
         connection_options={
             "useConnectionProperties": "true",
             "connectionName": CONNECTION_NAME,
-            "dbtable": DB_TABLE,
-            "pushDownPredicate": "$(pushdown_predicate)"
-        }
+            "dbtable": DB_TABLE
+        },
+        transformation_ctx="datasource_dim_film"
     )
     df_film = datasource.toDF()
 
