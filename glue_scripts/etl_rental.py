@@ -13,7 +13,7 @@ def main():
     job = Job(glueContext)
     job.init(args['JOB_NAME'], args)
 
-    # Parámetros
+    # Parámetros de entrada
     CONNECTION_NAME = "Jdbc connection"
     S3_TARGET_PATH = "s3://cmjm-datalake/facts/fact_rental/"
 

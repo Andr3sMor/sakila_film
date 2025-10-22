@@ -13,7 +13,7 @@ env:
   TEMP_DIR: s3://cmjm-datalake/temp/
   GLUE_VERSION: 4.0
   PYTHON_VERSION: 3
-  CONNECTION_NAME: Jdbc connection
+  CONNECTION_NAME: ${{secrets.JDBC_CONNECTION_NAME}}
 
 jobs:
   deploy-glue-jobs:
