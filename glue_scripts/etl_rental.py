@@ -16,6 +16,8 @@ def main():
     # Parámetros
     S3_TARGET_PATH = "s3://cmjm-datalake/facts/fact_rental/"
     CONNECTION_NAME = "Jdbc connection"
+    GLUE_DATABASE = "sakila_dwh"
+    GLUE_TABLE = "fact_rental"
 
     # Lectura desde RDS usando Job Bookmark
     datasource = glueContext.create_dynamic_frame.from_options(
@@ -32,9 +34,9 @@ def main():
                 JOIN inventory i ON r.inventory_id = i.inventory_id
                 JOIN staff st ON r.staff_id = st.staff_id
                 JOIN store s ON st.store_id = s.store_id) AS rental_data
-            """,
-            "pushDownPredicate": "$(pushdown_predicate)"
-        }
+            """
+        },
+        transformation_ctx="datasource_fact_rental"
     )
     df_rental = datasource.toDF()
 
@@ -47,9 +49,20 @@ def main():
         "partition_date", lit("static")
     )
 
-    # Escritura en bucket S3
+    # Escritura en S3 y actualización del Catálogo para Athena
     print(f"-> Escribiendo datos en S3: {S3_TARGET_PATH}")
-    df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+    dyf = glueContext.create_dynamic_frame.fromDF(df_fact_rental, glueContext, "dyf_fact_rental")
+    sink = glueContext.getSink(
+        path=S3_TARGET_PATH,
+        connection_type="s3",
+        updateBehavior="UPDATE_IN_DATABASE",
+        partitionKeys=["partition_date"],
+        enableUpdateCatalog=True,
+        transformation_ctx="sink_fact_rental"
+    )
+    sink.setFormat("glueparquet")
+    sink.setCatalogInfo(catalogDatabase=GLUE_DATABASE, catalogTableName=GLUE_TABLE)
+    sink.writeFrame(dyf)
 
     job.commit()
     spark.stop()

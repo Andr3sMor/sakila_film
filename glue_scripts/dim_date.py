@@ -21,6 +21,8 @@ def main():
     S3_TARGET_PATH = "s3://cmjm-datalake/dimensions/dim_date/"
     START_DATE = "2015-01-01"
     END_DATE = "2030-12-31"
+    GLUE_DATABASE = "sakila_dwh"
+    GLUE_TABLE = "dim_date"
 
     # Generar rango de fechas
     df_dates = spark.range(
@@ -49,9 +51,20 @@ def main():
         "partition_date", lit("static")
     )
 
-    # Escribir en S3
+    # Escribir en S3 y registrar la tabla para Athena
     print(f"-> Escribiendo Dim_Date en S3: {S3_TARGET_PATH}")
-    df_dates.write.mode("overwrite").format("parquet").save(S3_TARGET_PATH)
+    dyf = glueContext.create_dynamic_frame.fromDF(df_dates, glueContext, "dyf_dim_date")
+    sink = glueContext.getSink(
+        path=S3_TARGET_PATH,
+        connection_type="s3",
+        updateBehavior="UPDATE_IN_DATABASE",
+        partitionKeys=[],
+        enableUpdateCatalog=True,
+        transformation_ctx="sink_dim_date"
+    )
+    sink.setFormat("glueparquet")
+    sink.setCatalogInfo(catalogDatabase=GLUE_DATABASE, catalogTableName=GLUE_TABLE)
+    sink.writeFrame(dyf)
 
     job.commit()
     spark.stop()
