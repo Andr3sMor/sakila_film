@@ -1,122 +1,270 @@
-name: Deploy and Run AWS Glue Jobs
+name: CICD Pipeline AWS Glue ETL
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - glue_scripts/*.py
+      - tests/*.py
+      - requirements.txt
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-env:
-  AWS_REGION: us-east-1
-  ROLE_ARN: arn:aws:iam::848073509548:role/AWSGlueServiceRoleDefault
-  SCRIPT_BUCKET: cmjm-scripts
-  TEMP_DIR: s3://cmjm-datalake/temp/
-  GLUE_VERSION: 4.0
-  PYTHON_VERSION: 3
-  CONNECTION_NAME: ${{secrets.JDBC_CONNECTION_NAME}}
-
 jobs:
-  deploy-glue-jobs:
+  # --------------------------------------------------
+  # 1. Tests Unitarios (Mocking)
+  # --------------------------------------------------
+  test:
+    name: Run ETL Unit Tests
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies and set up environment
+        run: |
+          python3 -m venv env-test
+          source env-test/bin/activate
+          pip install pytest mock boto3 botocore pyspark
+
+      - name: Run ETL Tests
+        run: |
+          source env-test/bin/activate
+          export PYTHONPATH=$GITHUB_WORKSPACE:$PYTHONPATH
+          pytest tests/ -v
+
+  # --------------------------------------------------
+  # 2. Despliegue de AWS Glue Jobs (Crear/Actualizar)
+  # --------------------------------------------------
+  deploy-glue:
+    name: Deploy AWS Glue Scripts and Update Jobs
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Upload scripts to S3
+      # --------------------------------------------------
+      # Subir los scripts a S3
+      # --------------------------------------------------
+      - name: Upload Glue Scripts to S3
+        id: upload
         run: |
-          echo "Uploading ETL scripts to S3..."
-          aws s3 cp src/etl_dim_customer.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_customer.py
-          aws s3 cp src/etl_dim_film.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_film.py
-          aws s3 cp src/etl_dim_store.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_store.py
-          aws s3 cp src/etl_dim_date.py s3://${SCRIPT_BUCKET}/scripts/etl_dim_date.py
-          aws s3 cp src/etl_rental.py s3://${SCRIPT_BUCKET}/scripts/etl_rental.py
-          aws s3 cp src/etl_fact_rental_sql.py s3://${SCRIPT_BUCKET}/scripts/etl_fact_rental_sql.py
+          VERSION=$(date +%Y%m%d%H%M%S)
+          S3_BUCKET=${{ secrets.S3_BUCKET_SCRIPTS }}
 
-      - name: Create or update Glue Jobs
+          # Subir dim_customer.py
+          aws s3 cp glue_scripts/dim_customer.py s3://$S3_BUCKET/dim_customer/$VERSION/dim_customer.py
+          echo "DIM_CUSTOMER_SCRIPT=s3://$S3_BUCKET/dim_customer/$VERSION/dim_customer.py" >> $GITHUB_ENV
+
+          # Subir dim_film.py
+          aws s3 cp glue_scripts/dim_film.py s3://$S3_BUCKET/dim_film/$VERSION/dim_film.py
+          echo "DIM_FILM_SCRIPT=s3://$S3_BUCKET/dim_film/$VERSION/dim_film.py" >> $GITHUB_ENV
+
+          # Subir dim_store.py
+          aws s3 cp glue_scripts/dim_store.py s3://$S3_BUCKET/dim_store/$VERSION/dim_store.py
+          echo "DIM_STORE_SCRIPT=s3://$S3_BUCKET/dim_store/$VERSION/dim_store.py" >> $GITHUB_ENV
+
+          # Subir dim_date.py
+          aws s3 cp glue_scripts/dim_date.py s3://$S3_BUCKET/dim_date/$VERSION/dim_date.py
+          echo "DIM_DATE_SCRIPT=s3://$S3_BUCKET/dim_date/$VERSION/dim_date.py" >> $GITHUB_ENV
+
+          # Subir etl_rental.py
+          aws s3 cp glue_scripts/etl_rental.py s3://$S3_BUCKET/etl_rental/$VERSION/etl_rental.py
+          echo "ETL_RENTAL_SCRIPT=s3://$S3_BUCKET/etl_rental/$VERSION/etl_rental.py" >> $GITHUB_ENV
+
+      # --------------------------------------------------
+      # Crear o Actualizar la Definición de los Glue Jobs
+      # --------------------------------------------------
+      - name: Create or Update AWS Glue Job Definitions
         run: |
-          echo "Creating or updating AWS Glue Jobs..."
+          # Job para dim_customer
+          JOB_NAME="sakila-etl-dim-customer"
+          SCRIPT_PATH=${{ env.DIM_CUSTOMER_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
+            }'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+          fi
 
-          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental" "sakila-etl-fact-rental-sql")
-          SCRIPTS=("etl_dim_date.py" "etl_dim_customer.py" "etl_dim_film.py" "etl_dim_store.py" "etl_rental.py" "etl_fact_rental_sql.py")
+          # Job para dim_film
+          JOB_NAME="sakila-etl-dim-film"
+          SCRIPT_PATH=${{ env.DIM_FILM_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
+            }'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+          fi
 
-          for i in "${!JOBS[@]}"; do
-            JOB_NAME=${JOBS[$i]}
-            SCRIPT_NAME=${SCRIPTS[$i]}
-            echo "Processing job: $JOB_NAME"
+          # Job para dim_store
+          JOB_NAME="sakila-etl-dim-store"
+          SCRIPT_PATH=${{ env.DIM_STORE_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
+            }'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+          fi
 
-            if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
-              echo "Updating existing job: $JOB_NAME"
-              aws glue update-job \
-                --job-name "$JOB_NAME" \
-                --job-update '{
-                  "Role": "'${ROLE_ARN}'",
-                  "Command": {
-                    "Name": "glueetl",
-                    "ScriptLocation": "s3://'${SCRIPT_BUCKET}'/scripts/'${SCRIPT_NAME}'",
-                    "PythonVersion": "'${PYTHON_VERSION}'"
-                  },
-                  "DefaultArguments": {
-                    "--job-bookmark-option": "job-bookmark-enable",
-                    "--TempDir": "'${TEMP_DIR}'",
-                    "--enable-continuous-cloudwatch-log": "true",
-                    "--connection_name": "'${CONNECTION_NAME}'"
-                  },
-                  "GlueVersion": "'${GLUE_VERSION}'",
-                  "ExecutionProperty": {
-                    "MaxConcurrentRuns": 1
-                  },
-                  "MaxRetries": 0
-                }'
-            else
-              echo "Creating new job: $JOB_NAME"
-              aws glue create-job \
-                --name "$JOB_NAME" \
-                --role "$ROLE_ARN" \
-                --command '{
-                  "Name": "glueetl",
-                  "ScriptLocation": "s3://'${SCRIPT_BUCKET}'/scripts/'${SCRIPT_NAME}'",
-                  "PythonVersion": "'${PYTHON_VERSION}'"
-                }' \
-                --default-arguments '{
-                  "--job-bookmark-option": "job-bookmark-enable",
-                  "--TempDir": "'${TEMP_DIR}'",
-                  "--enable-continuous-cloudwatch-log": "true",
-                  "--connection_name": "'${CONNECTION_NAME}'"
-                }' \
-                --glue-version "${GLUE_VERSION}" \
-                --execution-property '{"MaxConcurrentRuns":1}' \
-                --max-retries 0
-            fi
-          done
+          # Job para dim_date
+          JOB_NAME="sakila-etl-dim-date"
+          SCRIPT_PATH=${{ env.DIM_DATE_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0"
+            }'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}'
+          fi
 
-      - name: Run Glue Jobs Sequentially
+          # Job para etl_rental
+          JOB_NAME="sakila-etl-fact-rental"
+          SCRIPT_PATH=${{ env.ETL_RENTAL_SCRIPT }}
+          set +e
+          aws glue get-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }}
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 0 ]; then
+            aws glue update-job --job-name $JOB_NAME --region ${{ secrets.AWS_REGION }} --job-update '{
+              "Role": "${{ secrets.AWS_GLUE_ROLE_ARN }}",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "'"$SCRIPT_PATH"'",
+                "PythonVersion": "3"
+              },
+              "Connections": {
+                "Connections": ["Jdbc connection"]
+              },
+              "GlueVersion": "3.0",
+              "DefaultArguments": {
+                "--job-bookmark-option": "job-bookmark-enable"
+              }
+            }'
+          else
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+          fi
+
+      # --------------------------------------------------
+      # 3. Ejecutar los Glue Jobs
+      # --------------------------------------------------
+      - name: Run Glue Jobs
         run: |
-          echo "Running Glue Jobs in order..."
-          JOBS=("sakila-etl-dim-date" "sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-fact-rental" "sakila-etl-fact-rental-sql")
+          echo "Ejecutando Glue Jobs..."
+          JOBS=("sakila-etl-dim-customer" "sakila-etl-dim-film" "sakila-etl-dim-store" "sakila-etl-dim-date" "sakila-etl-fact-rental")
+          MAX_WAIT_MINUTES=15
 
           for JOB_NAME in "${JOBS[@]}"; do
-            echo "Launching Glue Job: $JOB_NAME"
-            JOB_RUN_ID=$(aws glue start-job-run --job-name "$JOB_NAME" --query 'JobRunId' --output text)
-            echo "Waiting for completion of $JOB_NAME (Run ID: $JOB_RUN_ID)..."
-            aws glue get-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --query 'JobRun.State' --output text
+            echo "Lanzando Glue Job $JOB_NAME"
+            JOB_RUN_ID=$(aws glue start-job-run \
+              --job-name "$JOB_NAME" \
+              --region ${{ secrets.AWS_REGION }} \
+              --query JobRunId \
+              --output text)
+            echo "JobRunId: $JOB_RUN_ID"
+            echo "Esperando a que finalice la ejecución para $JOB_NAME..."
+            WAITED=0
+            STATE="STARTING"
 
-            STATUS=$(aws glue get-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --query 'JobRun.JobRunState' --output text)
-            until [[ "$STATUS" == "SUCCEEDED" || "$STATUS" == "FAILED" || "$STATUS" == "STOPPED" ]]; do
-              sleep 30
-              STATUS=$(aws glue get-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --query 'JobRun.JobRunState' --output text)
-              echo "Status for $JOB_NAME: $STATUS"
+            while [ "$STATE" == "STARTING" ] || [ "$STATE" == "RUNNING" ] || [ "$STATE" == "STOPPING" ]; do
+              if [ $WAITED -ge $MAX_WAIT_MINUTES ]; then
+                echo "Error: Tiempo máximo de espera alcanzado ($MAX_WAIT_MINUTES min)."
+                aws glue stop-job-run --job-name "$JOB_NAME" --run-id "$JOB_RUN_ID" --region ${{ secrets.AWS_REGION }} || true
+                exit 1
+              fi
+              sleep 60
+              WAITED=$((WAITED+1))
+              STATE=$(aws glue get-job-run \
+                --job-name "$JOB_NAME" \
+                --run-id "$JOB_RUN_ID" \
+                --query 'JobRun.JobRunState' \
+                --region ${{ secrets.AWS_REGION }} \
+                --output text)
+              echo "Estado actual ($JOB_NAME): $STATE (min: $WAITED)"
             done
 
-            if [[ "$STATUS" != "SUCCEEDED" ]]; then
-              echo "❌ Job $JOB_NAME failed with status $STATUS"
+            if [ "$STATE" != "SUCCEEDED" ]; then
+              echo "Error: El job $JOB_NAME falló con estado $STATE"
               exit 1
             fi
-            echo "✅ Job $JOB_NAME completed successfully"
+            echo "Job $JOB_NAME completado exitosamente"
           done
+
+      - name: Deployment Completed
+        run: echo "Despliegue continuo de Glue Jobs completado."
