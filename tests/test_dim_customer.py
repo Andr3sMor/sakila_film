@@ -1,29 +1,15 @@
-import pytest
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import lit
+from glue_scripts import dim_customer
+from pyspark.sql import Row
 
-@pytest.fixture(scope="module")
-def spark():
-    spark = SparkSession.builder \
-        .appName("unit-test-dim-customer") \
-        .master("local[2]") \
-        .getOrCreate()
-    yield spark
-    spark.stop()
-
-def test_dim_customer_transformation(spark):
-    # Datos de entrada simulados
-    input_data = [
-        Row(customer_id=1, name="John Doe", last_update="2025-10-18", email="john@example.com"),
-        Row(customer_id=2, name="Jane Smith", last_update="2025-10-18", email="jane@example.com")
+def test_dim_customer_transform(spark):
+    customers = [
+        Row(customer_id=1, first_name="John", last_name="Doe", email="john@example.com", active=True),
+        Row(customer_id=2, first_name="Jane", last_name="Smith", email="jane@example.com", active=False),
     ]
-    df_customer = spark.createDataFrame(input_data)
-    PROCESSING_DATE = "2025-10-18"
+    df = spark.createDataFrame(customers)
 
-    # Simular transformación de datos
-    df_dim_customer = df_customer.withColumn("partition_date", lit(PROCESSING_DATE))
+    result = dim_customer.transform(df)
 
-    # Validaciones de usuario
-    assert df_dim_customer.columns == ["customer_id", "name", "last_update", "email", "partition_date"]
-    assert df_dim_customer.count() == 2
-    assert df_dim_customer.first().partition_date == PROCESSING_DATE
+    assert "customer_key" in result.columns
+    assert result.count() == 2
+    assert result.filter(result.active == True).count() == 1

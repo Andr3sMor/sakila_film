@@ -1,29 +1,15 @@
-import pytest
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import lit
+from glue_scripts import dim_store
+from pyspark.sql import Row
 
-@pytest.fixture(scope="module")
-def spark():
-    spark = SparkSession.builder \
-        .appName("unit-test-dim-store") \
-        .master("local[2]") \
-        .getOrCreate()
-    yield spark
-    spark.stop()
-
-def test_dim_store_transformation(spark):
-    # Datos de entrada simulados
-    input_data = [
-        Row(store_id=1, address="123 Main St", last_update="2025-10-18"),
-        Row(store_id=2, address="456 Oak Ave", last_update="2025-10-18")
+def test_dim_store_transform(spark):
+    stores = [
+        Row(store_id=1, manager_staff_id=2, address="123 Main St", city="Miami"),
+        Row(store_id=2, manager_staff_id=3, address="456 Oak St", city="Orlando"),
     ]
-    df_store = spark.createDataFrame(input_data)
-    PROCESSING_DATE = "2025-10-18"
+    df = spark.createDataFrame(stores)
 
-    # Simular transformación
-    df_dim_store = df_store.withColumn("partition_date", lit(PROCESSING_DATE))
+    result = dim_store.transform(df)
 
-    # Validaciones
-    assert df_dim_store.columns == ["store_id", "address", "last_update", "partition_date"]
-    assert df_dim_store.count() == 2
-    assert df_dim_store.first().partition_date == PROCESSING_DATE
+    assert "store_key" in result.columns
+    assert result.count() == 2
+    assert result.filter(result.city == "Miami").count() == 1

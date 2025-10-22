@@ -1,67 +1,27 @@
 import pytest
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import col, date_format, lit
+from pyspark.sql import Row
+from pyspark.sql.functions import col
+from glue_scripts import etl_rental
 
-@pytest.fixture(scope="module")
-def spark():
-    spark = SparkSession.builder \
-        .appName("unit-test-fact-rental") \
-        .master("local[2]") \
-        .getOrCreate()
-    yield spark
-    spark.stop()
-
-def test_fact_rental_transformation(spark):
-    # 1. Datos de entrada simulados (ahora incluyen film_id y store_id)
-    input_data = [
-        Row(
-            rental_id=1,
-            rental_date="2025-10-18",
-            customer_id=5,
-            staff_id=2,
-            amount=10.5,
-            payment_date="2025-10-18",
-            film_id=10,  # Valor real desde inventory
-            store_id=1   # Valor real desde store
-        ),
-        Row(
-            rental_id=2,
-            rental_date="2025-10-18",
-            customer_id=7,
-            staff_id=3,
-            amount=7.5,
-            payment_date="2025-10-18",
-            film_id=20,  # Valor real desde inventory
-            store_id=2   # Valor real desde store
-        )
+def test_etl_rental_transformations(spark):
+    # Simula tabla de entrada
+    data = [
+        Row(rental_id=1, customer_id=101, film_id=11, rental_date="2025-01-10", amount=4.99),
+        Row(rental_id=2, customer_id=102, film_id=12, rental_date="2025-01-12", amount=2.99),
     ]
-    df_rental = spark.createDataFrame(input_data)
-    PROCESSING_DATE = "2025-10-18"
+    df = spark.createDataFrame(data)
 
-    # 2. Simular la transformación (igual que en el script principal)
-    df_fact_rental = (
-        df_rental.withColumn("date_id", date_format(col("rental_date"), "yyyyMMdd").cast("int"))
-        .select(
-            "amount",
-            "rental_date",
-            "date_id",
-            "customer_id",
-            "film_id",  # Ahora se usa el valor real
-            col("store_id").alias("store_id")  # Ahora se usa el valor real
-        )
-        .withColumn("partition_date", lit(PROCESSING_DATE))
-    )
+    # Ejecuta la función principal de transformación
+    result_df = etl_rental.transform(df)
 
-    # 3. Validaciones
-    expected_columns = ["amount", "rental_date", "date_id", "customer_id", "film_id", "store_id", "partition_date"]
-    assert df_fact_rental.columns == expected_columns, f"Columnas esperadas: {expected_columns}. Obtenidas: {df_fact_rental.columns}"
+    # Validaciones de negocio
+    assert "rental_id" in result_df.columns
+    assert "amount" in result_df.columns
+    assert result_df.count() == 2
 
-    # Validar valores específicos
-    first_row = df_fact_rental.first()
-    assert first_row.date_id == 20251018, f"date_id incorrecto: {first_row.date_id}"
-    assert first_row.film_id == 10, f"film_id incorrecto: {first_row.film_id}"
-    assert first_row.store_id == 1, f"store_id incorrecto: {first_row.store_id}"
-    assert first_row.partition_date == PROCESSING_DATE, f"partition_date incorrecto: {first_row.partition_date}"
+    # Ejemplo: validar tipo de dato
+    assert dict(result_df.dtypes)["amount"] == "double"
 
-    # 4. Validar cantidad de registros
-    assert df_fact_rental.count() == 2, f"Cantidad de registros incorrecta: {df_fact_rental.count()}"
+    # Ejemplo: validar monto total
+    total = result_df.selectExpr("sum(amount) as total").collect()[0]["total"]
+    assert round(total, 2) == 7.98
