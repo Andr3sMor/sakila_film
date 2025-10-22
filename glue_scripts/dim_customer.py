@@ -17,6 +17,8 @@ def main():
     S3_TARGET_PATH = "s3://cmjm-datalake/dimensions/dim_customer/"
     CONNECTION_NAME = "Jdbc connection"
     DB_TABLE = "customer"
+    GLUE_DATABASE = "sakila_dwh"
+    GLUE_TABLE = "dim_customer"
 
     # Lectura desde RDS usando Job Bookmark
     datasource = glueContext.create_dynamic_frame.from_options(
@@ -25,7 +27,8 @@ def main():
             "useConnectionProperties": "true",
             "connectionName": CONNECTION_NAME,
             "dbtable": DB_TABLE,
-            "pushDownPredicate": "$(pushdown_predicate)"  # Job Bookmark maneja esto automáticamente
+            # Cuando el Job Bookmark está habilitado, Glue inyecta el predicado incremental
+            "pushDownPredicate": "$(pushdown_predicate)"
         }
     )
     df_customer = datasource.toDF()
@@ -33,9 +36,22 @@ def main():
     # Transformaciones
     df_dim_customer = df_customer.withColumn("partition_date", lit("static"))
 
-    # Escritura en S3
+    # Conversión a DynamicFrame para escribir con catálogo de Glue
+    dyf_dim_customer = glueContext.create_dynamic_frame.fromDF(df_dim_customer, glueContext, "dyf_dim_customer")
+
+    # Escritura en S3 y actualización del Catálogo para Athena
     print(f"-> Escribiendo datos en S3: {S3_TARGET_PATH}")
-    df_dim_customer.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
+    sink = glueContext.getSink(
+        path=S3_TARGET_PATH,
+        connection_type="s3",
+        updateBehavior="UPDATE_IN_DATABASE",
+        partitionKeys=["partition_date"],
+        enableUpdateCatalog=True,
+        transformation_ctx="sink_dim_customer"
+    )
+    sink.setFormat("glueparquet")
+    sink.setCatalogInfo(catalogDatabase=GLUE_DATABASE, catalogTableName=GLUE_TABLE)
+    sink.writeFrame(dyf_dim_customer)
 
     job.commit()
     spark.stop()

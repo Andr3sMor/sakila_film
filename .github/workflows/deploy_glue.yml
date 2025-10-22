@@ -55,6 +55,20 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Asegurar que exista la base de datos de Glue para Athena
+      - name: Ensure Glue Database exists
+        run: |
+          set +e
+          aws glue get-database --name sakila_dwh --region ${{ secrets.AWS_REGION }} >/dev/null 2>&1
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Creating Glue database sakila_dwh"
+            aws glue create-database --region ${{ secrets.AWS_REGION }} --database-input '{"Name":"sakila_dwh"}'
+          else
+            echo "Glue database sakila_dwh already exists"
+          fi
+
       # --------------------------------------------------
       # Subir los scripts a S3
       # --------------------------------------------------
@@ -109,11 +123,15 @@ jobs:
               },
               "GlueVersion": "3.0",
               "DefaultArguments": {
-                "--job-bookmark-option": "job-bookmark-enable"
+                "--job-bookmark-option": "job-bookmark-enable",
+                "--enable-metrics": "true",
+                "--enable-continuous-cloudwatch-log": "true",
+                "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/",
+                "--enable-s3-parquet-optimized-committer": "true"
               }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable", "--enable-metrics": "true", "--enable-continuous-cloudwatch-log": "true", "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/", "--enable-s3-parquet-optimized-committer": "true"}'
           fi
 
           # Job para dim_film
@@ -136,11 +154,15 @@ jobs:
               },
               "GlueVersion": "3.0",
               "DefaultArguments": {
-                "--job-bookmark-option": "job-bookmark-enable"
+                "--job-bookmark-option": "job-bookmark-enable",
+                "--enable-metrics": "true",
+                "--enable-continuous-cloudwatch-log": "true",
+                "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/",
+                "--enable-s3-parquet-optimized-committer": "true"
               }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable", "--enable-metrics": "true", "--enable-continuous-cloudwatch-log": "true", "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/", "--enable-s3-parquet-optimized-committer": "true"}'
           fi
 
           # Job para dim_store
@@ -163,11 +185,15 @@ jobs:
               },
               "GlueVersion": "3.0",
               "DefaultArguments": {
-                "--job-bookmark-option": "job-bookmark-enable"
+                "--job-bookmark-option": "job-bookmark-enable",
+                "--enable-metrics": "true",
+                "--enable-continuous-cloudwatch-log": "true",
+                "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/",
+                "--enable-s3-parquet-optimized-committer": "true"
               }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable", "--enable-metrics": "true", "--enable-continuous-cloudwatch-log": "true", "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/", "--enable-s3-parquet-optimized-committer": "true"}'
           fi
 
           # Job para dim_date
@@ -214,11 +240,15 @@ jobs:
               },
               "GlueVersion": "3.0",
               "DefaultArguments": {
-                "--job-bookmark-option": "job-bookmark-enable"
+                "--job-bookmark-option": "job-bookmark-enable",
+                "--enable-metrics": "true",
+                "--enable-continuous-cloudwatch-log": "true",
+                "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/",
+                "--enable-s3-parquet-optimized-committer": "true"
               }
             }'
           else
-            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable"}'
+            aws glue create-job --name $JOB_NAME --role ${{ secrets.AWS_GLUE_ROLE_ARN }} --region ${{ secrets.AWS_REGION }} --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 --glue-version 3.0 --number-of-workers 2 --worker-type G.1X --connections '{"Connections": ["Jdbc connection"]}' --default-arguments '{"--job-bookmark-option": "job-bookmark-enable", "--enable-metrics": "true", "--enable-continuous-cloudwatch-log": "true", "--TempDir": "s3://${{ secrets.S3_BUCKET_TEMP }}/glue/temp/", "--enable-s3-parquet-optimized-committer": "true"}'
           fi
 
       # --------------------------------------------------
