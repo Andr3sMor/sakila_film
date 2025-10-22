@@ -47,7 +47,7 @@ def main():
         "partition_date", lit("static")
     )
 
-    # Escritura en S3
+    # Escritura en bucket S3
     print(f"-> Escribiendo datos en S3: {S3_TARGET_PATH}")
     df_fact_rental.write.mode("append").format("parquet").partitionBy("partition_date").save(S3_TARGET_PATH)
 
